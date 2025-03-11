@@ -225,5 +225,12 @@ int main(){
         }
     }
     }
+    // cout << "Final temperature: " << compute_temperature(vx, vy, vz, m, N) << endl;
 
+    delete[] x; delete[] y; delete[] z;
+    delete[] vx; delete[] vy; delete[] vz;
+    delete[] fx; delete[] fy; delete[] fz;
+    delete[] m; delete[] type;
+    particle_file.close();
+    kinetic_file.close();
 }
