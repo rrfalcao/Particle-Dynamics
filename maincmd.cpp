@@ -30,28 +30,6 @@ bool far_enough(double x, double y, double z, double* x_arr, double* y_arr, doub
         return true;  // Far enough, accept
     } 
 
-void init_particle(double* x, double* y, double* z, double * vx, double * vy, double* vz, int N, double Lx, double Ly, double Lz){
-    srand(time(0));
-    int inited=0;
-    for (int i=0; i<N; i++){
-    
-        x[i]=Lx*(double)rand()/RAND_MAX;
-        y[i]=Ly*(double)rand()/RAND_MAX;
-        z[i]=Lz*(double)rand()/RAND_MAX;
-        vx[i]=(double)rand()/RAND_MAX - 0.5;
-        vy[i]=(double)rand()/RAND_MAX - 0.5;
-        vz[i]=(double)rand()/RAND_MAX - 0.5;
-        
-        if (far_enough(x[i], y[i], z[i], x, y, z, inited)){
-            inited++;
-        }
-        else{
-            i--;
-        }
-        
-    
-    
-}}
 void init_particle(double* x, double* y, double* z, double* vx, double* vy, double* vz, int N, double Lx, double Ly, double Lz, std::string initial_condition) {
     srand(time(0));
 
@@ -332,14 +310,10 @@ int main(int argc, char** argv) {
 
     /////////////////////// Numerical Loop /////////////////////////
     int steps = T_tot / dt;
+    double time=0.0;
     for (int t = 0; t < steps; t++) {
-        compute_forces(x, y, z, fx, fy, fz, type, N);
-        update_velocities(vx, vy, vz, fx, fy, fz, m, N, dt);
-        update_positions(x, y, z, vx, vy, vz, N, dt);
-        apply_boundary_conditions(x, y, z, vx, vy, vz, N, Lx, Ly, Lz);
-
-        double time = t * dt;
-        if (fmod(time, 0.1) < dt) {  // Write data every 0.1 time units
+        
+        if (t%100==0) {  // Write data every 0.1 time units
             double K = compute_KE(vx, vy, vz, m, N);
             kinetic_file << time << " " << K << "\n";
 
@@ -349,6 +323,12 @@ int main(int argc, char** argv) {
                               << vx[i] << " " << vy[i] << " " << vz[i] << "\n";
             }
         }
+        compute_forces(x, y, z, fx, fy, fz, type, N);
+        update_velocities(vx, vy, vz, fx, fy, fz, m, N, dt);
+        update_positions(x, y, z, vx, vy, vz, N, dt);
+        apply_boundary_conditions(x, y, z, vx, vy, vz, N, Lx, Ly, Lz);
+
+        time += dt;
     }
 
 
