@@ -6,6 +6,8 @@
 #include <cstdlib>
 #include <cblas.h>
 #include <fstream> 
+#include <boost/program_options.hpp>
+namespace po = boost::program_options;
 using namespace std;
 #define F77NAME(x) x##_
 
