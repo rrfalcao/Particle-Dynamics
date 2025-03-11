@@ -9,10 +9,6 @@
 using namespace std;
 #define F77NAME(x) x##_
 
-
-std::ofstream particle_file("particles.txt");
-std::ofstream kinetic_file("kinetic_energy.txt");
-
 extern "C" {
 
     }
@@ -169,7 +165,7 @@ void scale_velocities(double* vx, double* vy, double* vz, double* m, int N, doub
 int main(){
 
 
-    int N=2;
+    int N=4;
     const double dt = 0.001;  // Time step
     const double Lx = 20.0, Ly = 20.0, Lz = 20.0;  // Box dimensions
     double T_tot = 10.0;  // Total simulation time
@@ -194,17 +190,18 @@ int main(){
     //Assign types and masses
     for (int i = 0; i < N; i++) {
         if (i < N * p1) {
-            type[i] = 0;
-            m[i] = m0;
-        } else {
             type[i] = 1;
             m[i] = m1;
+        } else {
+            type[i] = 0;
+            m[i] = m0;
         }
     }
+    std::ofstream particle_file("particles.txt", std::ofstream::trunc);
+    std::ofstream kinetic_file("kinetic_energy.txt", std::ofstream::trunc);
 
     init_particle(x, y, z, vx, vy, vz, N, Lx, Ly, Lz);
-    
-    cout << "Initial temperature: " << compute_temperature(vx, vy, vz, m, N) << endl;
+    scale_velocities(vx, vy, vz, m, N, 15.0);
     for (int t = 0; t < steps; t++) {
         compute_forces(x, y, z, fx, fy, fz, type, N);
         update_velocities(vx, vy, vz, fx, fy, fz, m, N, dt);
