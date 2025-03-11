@@ -207,7 +207,9 @@ int main(){
     cout << "Initial temperature: " << compute_temperature(vx, vy, vz, m, N) << endl;
     for (int t = 0; t < steps; t++) {
         compute_forces(x, y, z, fx, fy, fz, type, N);
-
+        update_velocities(vx, vy, vz, fx, fy, fz, m, N, dt);
+        update_positions(x, y, z, vx, vy, vz, N, dt);
+        apply_boundary_conditions(x, y, z, vx, vy, vz, N, Lx, Ly, Lz);
         double time = t * dt;  // Current time
     if (fmod(time, 0.1) < dt) {  // Every 0.1 time units, write data
         double K = compute_KE(vx, vy, vz, m, N);
