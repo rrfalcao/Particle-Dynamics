@@ -235,6 +235,135 @@ void scale_velocities(double* vx, double* vy, double* vz, double* m, int N, doub
     }
 }
 
+
+void unit_tests(std::string test_flag, double time, double min_separation, double* x, double* y, double* vx, double* vy, int N, double Lx, double Ly,bool end) {
+
+    
+    static bool first_collision1_detected = false;
+    static bool first_collision2_detected = false;
+    const double tol = 1.0e-4;
+
+    if (test_flag == "ic-one") {
+        // Test 1: Particle must remain stationary
+        
+        if (abs(vx[0]) > tol || abs(vy[0]) > tol) {
+            cout << "FAIL: Particle has moved! Velocity: ("<< vx[0] << ", " << vy[0] << ")\n";
+            return;
+        }
+        
+        else if(end){cout << "PASS: Particle remained stationary.\n";}
+        
+    } 
+    
+    else if (test_flag == "ic-one-vel") {
+        // Test 2: First wall collision
+        if (!first_collision1_detected) {
+            if (x[0] <= 0.0 || x[0] >= Lx || y[0] <= 0.0 || y[0] >= Ly) {
+               
+                first_collision1_detected = true;
+                cout << "PASS: First wall collision at ("  << x[0] << ", " << y[0]  << ") at t = " << time << "\n";
+            }
+        }
+    } 
+    
+    else if (test_flag == "ic-two") {
+        // Test 3: Minimum separation check
+        if(end){
+            if (abs(min_separation-1.00022)<tol){
+                cout << "PASS: Minimum separation: " << min_separation 
+                        << " (Expected: ~1.0022)\n";
+            } else {
+                cout << "FAIL: Minimum separation: " << min_separation 
+                        << " (Expected: ~1.0022)\n";
+            }
+    } }
+    
+    else if (test_flag == "ic-two-pass1") {
+        // Test 4 & 5: Particle 1 and 2 wall collision + min separation
+        if (!first_collision1_detected) {
+            if (x[0] <= 0.0 || x[0] >= Lx || y[0] <= 0.0 || y[0] >= Ly) {
+                first_collision1_detected = true;
+                if (abs(x[0]-20.0)<(tol*100) && abs(y[0]-8.99)<(tol*100)){
+                    cout << "PASS: Particle 1 hit wall at (" << x[0] << ", " << y[0] << ")\n";
+                } else {
+                    cout << "FAIL: Particle 1 hit wall at (" << x[0] << ", " <<y[0]  << ")\n";
+                }
+            }
+        }
+        if (!first_collision2_detected) {
+            if (x[1] <= 0.0 || x[1] >= Lx || y[1] <= 0.0 || y[1] >= Ly) {
+                first_collision2_detected = true;
+                if (abs(x[1]-0.0)<(tol*100) && abs(y[1]-11.0)<(tol*1000)){
+                    
+                    cout << "PASS: Particle 2 hit wall at (" << x[1] << ", " << y[1] << ")\n";
+                } else {
+        
+                    cout << "FAIL: Particle 2 hit wall at (" << x[1] << ", " << y[1] << ")\n";
+                }
+            }
+        }
+        if(end){
+        if (abs(min_separation-2.89619)<tol){
+            cout << "PASS: Minimum separation: " << min_separation 
+                        << " (Expected: ~2.89619)\n";
+            } else {
+            cout << "FAIL: Minimum separation: " << min_separation 
+                        << " (Expected: ~2.89619)\n";
+            }
+            } 
+    }
+    else if (test_flag == "ic-two-pass2") {
+        // Test 5: Particle 1 and 2 wall collision + min separation
+        if (!first_collision1_detected) {
+            ;
+            if (x[0] <= 0.0 || x[0] >= Lx || y[0] <= 0.0 || y[0] >= Ly) {
+                first_collision1_detected = true;
+                
+                if (abs(x[0]-20.0)<(tol*100) && abs(y[0]-15.33)<(tol*100)){
+                    cout << "PASS: Particle 1 hit wall at (" << x[0] << ", " << y[0] << ")\n";
+                } else {
+                    cout << "FAIL: Particle 1 hit wall at (" << x[0] << ", " <<y[0]  << ")\n";
+                }
+            }
+        }
+        if (!first_collision2_detected) {
+            if (x[1] <= 0.0 || x[1] >= Lx || y[1] <= 0.0 || y[1] >= Ly) {
+                first_collision2_detected = true;
+                if (abs(x[1]-0.0)<(tol*100) && abs(y[1]-4.67)<(tol*100)){
+                    cout << "PASS: Particle 2 hit wall at (" << x[1] << ", " << y[1] << ")\n";
+                } else {
+                    cout << "FAIL: Particle 2 hit wall at (" << x[1] << ", " << y[1] << ")\n";
+                }
+            }
+        }
+        if(end){
+        if (abs(min_separation-1.02368)<tol){
+                cout << "PASS: Minimum separation: " << min_separation 
+                            << " (Expected: ~1.02368)\n";
+            } else {
+                cout << "FAIL: Minimum separation: " << min_separation 
+                            << " (Expected: ~1.02368)\n";
+            }
+            } 
+    }
+    
+    else if (test_flag == "ic-two-pass3") {
+        // Test 6: Minimum separation only
+        if(end){
+            if (abs(min_separation-3.10166)<tol){
+                cout << "PASS: Minimum separation: " << min_separation 
+                        << " (Expected: ~3.10166)\n";
+            } else {
+                cout << "FAIL: Minimum separation: " << min_separation 
+                        << " (Expected: ~3.10166)\n";
+            }
+        }
+}
+}
+
+
+
+
 int main(int argc, char** argv) {
     // **Command-line Configuration**
     double Lx = 20.0, Ly = 20.0, Lz = 20.0;
@@ -242,6 +371,7 @@ int main(int argc, char** argv) {
     int N = 8;
     double percent_type1 = 10.0;
     string initial_condition;
+    bool end = false;
     double temperature = 0.0;
     double min_sep = Lx;
     po::options_description opts("Allowed options");
@@ -251,7 +381,7 @@ int main(int argc, char** argv) {
         ("Ly", po::value<double>(&Ly)->default_value(20.0), "y length (Angstroms)")
         ("Lz", po::value<double>(&Lz)->default_value(20.0), "z length (Angstroms)")
         ("dt", po::value<double>(&dt)->default_value(0.001), "Time step")
-        ("T", po::value<double>(&T_tot)->default_value(10.0), "Final time")
+        ("T", po::value<double>(&T_tot)->default_value(50.0), "Final time")
         ("N", po::value<int>(&N)->default_value(8), "Number of particles")
         ("percent-type1", po::value<double>(&percent_type1)->default_value(10.0), "Percentage of type 1 particles")
         ("ic-one", "Initial condition: one stationary particle")
@@ -311,10 +441,9 @@ int main(int argc, char** argv) {
     double m0 = 1.0;
     double m1 = 10.0;
 
+    if (initial_condition != "ic-random") {
+        cout<<initial_condition<<endl;    }
 
-    
-
-    
     init_particle(x, y, z, vx, vy, vz, type, m, N, Lx, Ly, Lz, m0, m1,percent_type1, initial_condition);
 
 
@@ -330,6 +459,7 @@ int main(int argc, char** argv) {
 
     /////////////////////// Numerical Loop /////////////////////////
     int steps = T_tot / dt;
+
     double time=0.0;
     int writestep=static_cast<int>(0.1 / dt); // Cast double division to int
     for (int t = 0; t < steps; t++) {
@@ -347,12 +477,21 @@ int main(int argc, char** argv) {
         compute_forces(x, y, z, fx, fy, fz, type, N, min_sep);
         update_velocities(vx, vy, vz, fx, fy, fz, m, N, dt);
         update_positions(x, y, z, vx, vy, vz, N, dt);
+        
+        
+        if (initial_condition != "ic-random") {
+            unit_tests(initial_condition, time, min_sep, x, y, vx, vy, N, Lx, Ly,end);
+        }
+
         apply_boundary_conditions(x, y, z, vx, vy, vz, N, Lx, Ly, Lz);
 
         time += dt;
     }
-    cout<<min_sep<<endl;
 
+    end=true;
+    if (initial_condition != "ic-random") {
+        unit_tests(initial_condition, time, min_sep, x, y, vx, vy, N, Lx, Ly,end);
+    }
 
     /////// Cleanup Section ///////////
     delete[] x; delete[] y; delete[] z;

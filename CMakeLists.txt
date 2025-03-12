@@ -11,7 +11,7 @@ find_package(Boost REQUIRED COMPONENTS program_options)
 include_directories(${Boost_INCLUDE_DIRS})  
 find_package(BLAS REQUIRED)
 
-add_executable(md maincmd.cpp)
+add_executable(md maincmdtests.cpp)
 target_link_libraries(md ${Boost_LIBRARIES} ${BLAS_LIBRARIES})
 
 add_custom_target(default ALL DEPENDS md)
@@ -21,7 +21,17 @@ add_custom_target(clean_all
     COMMENT "Cleaning build files"
 )
 
-
+add_custom_target(run_tests
+    COMMAND ./md --ic-one
+    COMMAND ./md --ic-one-vel
+    COMMAND ./md --ic-two
+    COMMAND ./md --ic-two-pass1
+    COMMAND ./md --ic-two-pass2
+    COMMAND ./md --ic-two-pass3
+    DEPENDS md
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMENT "Running all test cases for Molecular Dynamics Simulation"
+)
 # add_custom_target(run
 #     COMMAND ./md ${ARGS}
 #     DEPENDS md
