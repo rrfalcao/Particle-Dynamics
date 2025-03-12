@@ -1,6 +1,0 @@
-/home/rf120/rf120/Particle-Dynamics/Particle-Dynamics/build/CMakeFiles/md.dir
-/home/rf120/rf120/Particle-Dynamics/Particle-Dynamics/build/CMakeFiles/default.dir
-/home/rf120/rf120/Particle-Dynamics/Particle-Dynamics/build/CMakeFiles/clean_all.dir
-/home/rf120/rf120/Particle-Dynamics/Particle-Dynamics/build/CMakeFiles/run_tests.dir
-/home/rf120/rf120/Particle-Dynamics/Particle-Dynamics/build/CMakeFiles/edit_cache.dir
-/home/rf120/rf120/Particle-Dynamics/Particle-Dynamics/build/CMakeFiles/rebuild_cache.dir

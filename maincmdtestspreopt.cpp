@@ -118,7 +118,7 @@ void init_particle(double* x, double* y, double* z, double* vx, double* vy, doub
     
 }}
 
-void compute_forces(double* x, double* y, double* z, double* fx, double* fy, double* fz, int* type, int N, double& min_sep,char test) {
+void compute_forces(double* x, double* y, double* z, double* fx, double* fy, double* fz, int* type, int N, double& min_sep,string initial_condition) {
 
     // Reset forces
     fill(fx, fx + N, 0.0);
@@ -127,19 +127,19 @@ void compute_forces(double* x, double* y, double* z, double* fx, double* fy, dou
 
     // Lennard-Jones parameters
     const double epsilon[2][2] = {{3.0, 15.0}, {15.0, 60.0}};
-    const double sigma6[2][2] = {{1.0, 64.0}, {64.0, 729.0}};
+    const double sigma[2][2] = {{1.0, 2.0}, {2.0, 3.0}};
 
     double dx = 0.0;
     double dy = 0.0;
     double dz = 0.0;
     double r = 0.0;
     double eps =0.0;
-    double sig6 = 0.0;
+    double sig = 0.0;
     int t1 = 0;
     int t2 = 0;
     double f = 0.0;
     
-    double r8 = 0.0;
+    double sig_r6 = 0.0;
     double r2 = 0.0;
     // Loop over all pairs of particles
 
@@ -154,20 +154,19 @@ void compute_forces(double* x, double* y, double* z, double* fx, double* fy, dou
             r2 = dx * dx + dy * dy + dz * dz;
             if (r2 > 0) {
                 
-                if (test=='y'){
-                    r= sqrt(r2);
                 
-                    if (r<min_sep){
-                        min_sep=r; //For Unit Testing
-                    }
+                r= sqrt(r2);
+                
+                if (r<min_sep){
+                   min_sep=r; //For Unit Testing    
                 }
 
                 t1 = type[i];
                 t2 = type[j];
                 eps = epsilon[t1][t2];
-                sig6 = sigma6[t1][t2];
-                r8=pow(r2,4);
-                f = 24 * eps * ((2*sig6*sig6*r2)/(r8*r8)) -sig6/r8;
+                sig = sigma[t1][t2];
+                sig_r6 = pow(sig / r, 6);
+                f = 24 * eps * (2 * sig_r6 * sig_r6 - sig_r6) / (r2);
 
                 fx[i] += f * dx;
                 fy[i] += f * dy;
@@ -443,10 +442,8 @@ int main(int argc, char** argv) {
     int* type = new int[N];
     double m0 = 1.0;
     double m1 = 10.0;
-    char test = 'y';
-    if (initial_condition == "ic-random") {
-        test='n';  }
-    if (test == 'y') {
+
+    if (initial_condition != "ic-random") {
         cout<<initial_condition<<endl;    }
 
     init_particle(x, y, z, vx, vy, vz, type, m, N, Lx, Ly, Lz, m0, m1,percent_type1, initial_condition);
@@ -479,12 +476,12 @@ int main(int argc, char** argv) {
                               << vx[i] << " " << vy[i] << " " << vz[i] << "\n";
             }
         }
-        compute_forces(x, y, z, fx, fy, fz, type, N, min_sep,test);
+        compute_forces(x, y, z, fx, fy, fz, type, N, min_sep,initial_condition);
         update_velocities(vx, vy, vz, fx, fy, fz, m, N, dt);
         update_positions(x, y, z, vx, vy, vz, N, dt);
         
         
-        if (test='y') {
+        if (initial_condition != "ic-random") {
             unit_tests(initial_condition, time, min_sep, x, y, vx, vy, N, Lx, Ly,end);
         }
 
@@ -494,7 +491,7 @@ int main(int argc, char** argv) {
     }
 
     end=true;
-    if (test='y') {
+    if (initial_condition != "ic-random") {
         unit_tests(initial_condition, time, min_sep, x, y, vx, vy, N, Lx, Ly,end);
     }
 
