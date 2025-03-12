@@ -29,8 +29,8 @@ def animate_xy_plane(filename="particles.txt"):
 
     # Create figure for animation
     fig, ax = plt.subplots(figsize=(6, 6))
-    ax.set_xlim(np.min(data[:, 3]), np.max(data[:, 3]))  # X limits
-    ax.set_ylim(np.min(data[:, 4]), np.max(data[:, 4]))  # Y limits
+    ax.set_xlim(0,20)  # X limits
+    ax.set_ylim(0,20)  # Y limits
     ax.set_xlabel("X Position")
     ax.set_ylabel("Y Position")
     ax.set_title("Particle Positions in XY Plane (Animation)")
@@ -77,9 +77,9 @@ def animate_3d_trajectory(filename="particles.txt"):
     ax.set_title("Particle Positions in 3D (Animation)")
 
     # Set axis limits based on data
-    ax.set_xlim(np.min(data[:, 3]), np.max(data[:, 3]))  # X limits
-    ax.set_ylim(np.min(data[:, 4]), np.max(data[:, 4]))  # Y limits
-    ax.set_zlim(np.min(data[:, 5]), np.max(data[:, 5]))  # Z limits
+    ax.set_xlim(0,20)  # X limits
+    ax.set_ylim(0,20)  # Y limits
+    ax.set_zlim(0,20)  # Z limits
 
     # Initialize scatter plot for particles
     scatter = ax.scatter([], [], [], c=[], marker='o')

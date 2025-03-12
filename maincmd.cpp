@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cblas.h>
+#include <limits>
 #include <fstream> 
 #include <boost/program_options.hpp>
 namespace po = boost::program_options;
