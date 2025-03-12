@@ -31,56 +31,75 @@ bool far_enough(double x, double y, double z, double* x_arr, double* y_arr, doub
         return true;  // Far enough, accept
     } 
 
-void init_particle(double* x, double* y, double* z, double* vx, double* vy, double* vz, int N, double Lx, double Ly, double Lz, std::string initial_condition) {
+void init_particle(double* x, double* y, double* z, double* vx, double* vy, double* vz, int* type, double* m,int N, double Lx, double Ly, double Lz,double m0, double m1, double percent_type1,std::string initial_condition) {
     srand(time(0));
 
     if (initial_condition == "ic-one") {
         // **Test Case 1: One stationary particle**
         x[0] = 10.0; y[0] = 10.0; z[0] = 10.0;
         vx[0] = 0.0; vy[0] = 0.0; vz[0] = 0.0;
+        type[0] = 0; m[0] = m0;
     } 
     else if (initial_condition == "ic-one-vel") {
         // **Test Case 2: One moving particle**
         x[0] = 10.0; y[0] = 10.0; z[0] = 10.0;
         vx[0] = 5.0; vy[0] = 2.0; vz[0] = 1.0;
+        type[0] = 0; m[0] = m0;
     } 
     else if (initial_condition == "ic-two") {
         // **Test Case 3: Two bouncing particles**
         x[0] = 8.5; y[0] = 10.0; z[0] = 10.0;
         vx[0] = 0.0; vy[0] = 0.0; vz[0] = 0.0;
+        type[0] = 0; m[0] = m0;
 
         x[1] = 11.5; y[1] = 10.0; z[1] = 10.0;
         vx[1] = 0.0; vy[1] = 0.0; vz[1] = 0.0;
+        type[1] = 0; m[1] = m0;
     }
     else if (initial_condition == "ic-two-pass1") {
         // **Test Case 4: Two passing particles**
         x[0] = 8.5; y[0] = 11.5; z[0] = 10.0;
         vx[0] = 0.5; vy[0] = 0.0; vz[0] = 0.0;
+        type[0] = 0; m[0] = m0;
 
         x[1] = 11.5; y[1] = 8.5; z[1] = 10.0;
         vx[1] = -0.5; vy[1] = 0.0; vz[1] = 0.0;
+        type[1] = 0; m[1] = m0;
     }
     else if (initial_condition == "ic-two-pass2") {
         // **Test Case 5: Two passing particles close**
         x[0] = 8.5; y[0] = 11.3; z[0] = 10.0;
         vx[0] = 0.5; vy[0] = 0.0; vz[0] = 0.0;
+        type[0] = 0; m[0] = m0;
 
         x[1] = 11.5; y[1] = 8.7; z[1] = 10.0;
         vx[1] = -0.5; vy[1] = 0.0; vz[1] = 0.0;
+        type[1] = 0; m[1] = m0;
     }
     else if (initial_condition == "ic-two-pass3") {
         // **Test Case 6: Two passing heavy particles**
         x[0] = 8.5; y[0] = 11.3; z[0] = 10.0;
         vx[0] = 0.5; vy[0] = 0.0; vz[0] = 0.0;
+        type[0] = 1; m[0] = m1;
 
         x[1] = 11.5; y[1] = 8.7; z[1] = 10.0;
         vx[1] = -0.5; vy[1] = 0.0; vz[1] = 0.0;
+        type[1] = 1; m[1] = m1;
     }
     else if (initial_condition == "ic-random") {
         // **Random initialization for N particles**
         int inited=0;
         for (int i=0; i<N; i++){
         
+
+            if (i < N * percent_type1 / 100.0) {
+                type[i] = 1;
+                m[i] = m1;
+            } else {
+                type[i] = 0;
+                m[i] = m0;
+            }
+
             x[i]=Lx*(double)rand()/RAND_MAX;
             y[i]=Ly*(double)rand()/RAND_MAX;
             z[i]=Lz*(double)rand()/RAND_MAX;
@@ -94,10 +113,12 @@ void init_particle(double* x, double* y, double* z, double* vx, double* vy, doub
             else{
                 i--;
             }
+
     }
+    
 }}
 
-void compute_forces(double* x, double* y, double* z, double* fx, double* fy, double* fz, int* type, int N) {
+void compute_forces(double* x, double* y, double* z, double* fx, double* fy, double* fz, int* type, int N, double& min_sep) {
 
     // Reset forces
     fill(fx, fx + N, 0.0);
@@ -133,6 +154,11 @@ void compute_forces(double* x, double* y, double* z, double* fx, double* fy, dou
             r2 = dx * dx + dy * dy + dz * dz;
             if (r2 > 0) {
                 r= sqrt(r2);
+
+                if (r<min_sep){
+                    min_sep=r; //For Unit Testing
+                }
+
                 t1 = type[i];
                 t2 = type[j];
                 eps = epsilon[t1][t2];
@@ -212,12 +238,12 @@ void scale_velocities(double* vx, double* vy, double* vz, double* m, int N, doub
 int main(int argc, char** argv) {
     // **Command-line Configuration**
     double Lx = 20.0, Ly = 20.0, Lz = 20.0;
-    double dt = 0.001, T_tot = 10.0;
+    double dt = 0.001, T_tot = 50.0;
     int N = 8;
     double percent_type1 = 10.0;
-    std::string initial_condition;
+    string initial_condition;
     double temperature = 0.0;
-
+    double min_sep = Lx;
     po::options_description opts("Allowed options");
     opts.add_options()
         ("help", "Print available options")
@@ -282,22 +308,14 @@ int main(int argc, char** argv) {
     double* fz = new double[N];
     double* m = new double[N]; 
     int* type = new int[N];
-    int m0 = 1;
-    int m1 = 10;
+    double m0 = 1.0;
+    double m1 = 10.0;
 
-
-    for (int i = 0; i < N; i++) {
-        if (i < N * percent_type1 / 100.0) {
-            type[i] = 1;
-            m[i] = m1;
-        } else {
-            type[i] = 0;
-            m[i] = m0;
-        }
-    }
 
     
-    init_particle(x, y, z, vx, vy, vz, N, Lx, Ly, Lz, initial_condition);
+
+    
+    init_particle(x, y, z, vx, vy, vz, type, m, N, Lx, Ly, Lz, m0, m1,percent_type1, initial_condition);
 
 
     // Temperature Change - only if temp is set
@@ -326,14 +344,14 @@ int main(int argc, char** argv) {
                               << vx[i] << " " << vy[i] << " " << vz[i] << "\n";
             }
         }
-        compute_forces(x, y, z, fx, fy, fz, type, N);
+        compute_forces(x, y, z, fx, fy, fz, type, N, min_sep);
         update_velocities(vx, vy, vz, fx, fy, fz, m, N, dt);
         update_positions(x, y, z, vx, vy, vz, N, dt);
         apply_boundary_conditions(x, y, z, vx, vy, vz, N, Lx, Ly, Lz);
 
         time += dt;
     }
-
+    cout<<min_sep<<endl;
 
 
     /////// Cleanup Section ///////////

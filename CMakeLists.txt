@@ -5,6 +5,8 @@ project(MolecularDynamics)
 set(CMAKE_CXX_STANDARD 17)
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2 -Wall")
 
+# set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}) - This moves md to the source file so the text outputs can be plotted
+
 find_package(Boost REQUIRED COMPONENTS program_options)
 include_directories(${Boost_INCLUDE_DIRS})  
 find_package(BLAS REQUIRED)
@@ -15,7 +17,7 @@ target_link_libraries(md ${Boost_LIBRARIES} ${BLAS_LIBRARIES})
 add_custom_target(default ALL DEPENDS md)
 
 add_custom_target(clean_all 
-    COMMAND rm -rf CMakeFiles CMakeCache.txt md
+    COMMAND rm -rf CMakeFiles CMakeCache.txt cmake_install.cmake Makefile md build
     COMMENT "Cleaning build files"
 )
 
