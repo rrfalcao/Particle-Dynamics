@@ -1,4 +1,4 @@
-### Start Wed Mar 12 22:28:17 2025
+### Start Wed Mar 12 22:55:14 2025
 # /apps/dev-studio/12.6/bin/../bin/er_archive -n -O /home/rf120/rf120/Particle-Dynamics/Particle-Dynamics/profile_run.er/er_archive.log /home/rf120/rf120/Particle-Dynamics/Particle-Dynamics/profile_run.er
 Copying `/home/rf120/rf120/Particle-Dynamics/Particle-Dynamics/md'  to `/home/rf120/rf120/Particle-Dynamics/Particle-Dynamics/profile_run.er/archives/md_plyGbeRLCK9'
 Copying `/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.30'  to `/home/rf120/rf120/Particle-Dynamics/Particle-Dynamics/profile_run.er/archives/libstdc++.so.6.0.30_dnWuQRcLhw9'

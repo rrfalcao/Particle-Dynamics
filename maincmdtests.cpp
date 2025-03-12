@@ -166,9 +166,9 @@ void compute_forces(double* x, double* y, double* z, double* fx, double* fy, dou
                 t2 = type[j];
                 eps = epsilon[t1][t2];
                 sig6 = sigma6[t1][t2];
-                r8=pow(r2,4);
-                f = 24 * eps * ((2*sig6*sig6*r2)/(r8*r8)) -sig6/r8;
-
+                r8=r2*r2*r2*r2;
+                f = 24 * eps * (((2*sig6*sig6)/(r8*r8)) -sig6/r8);
+                    
                 fx[i] += f * dx;
                 fy[i] += f * dy;
                 fz[i] += f * dz;
