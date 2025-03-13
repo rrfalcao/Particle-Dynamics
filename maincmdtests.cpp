@@ -124,64 +124,122 @@ void init_particle(double* x, double* y, double* z, double* vx, double* vy, doub
     
 }}
 
-void compute_forces(double* x, double* y, double* z, double* fx, double* fy, double* fz, int* type, int N, double& min_sep,char test) {
+// void compute_forces(double* x, double* y, double* z, double* fx, double* fy, double* fz, int* type, int N, double& min_sep,char test) {
 
-    // Reset forces
+//     // Reset forces
+//     fill(fx, fx + N, 0.0);
+//     fill(fy, fy + N, 0.0);
+//     fill(fz, fz + N, 0.0);
+
+//     // Lennard-Jones parameters
+//     const double epsilon24[2][2] = {{72.0, 360.0}, {360.0, 1440.0}};
+//     const double sigma6[2][2] = {{1.0, 64.0}, {64.0, 729.0}};
+
+//     double dx = 0.0;
+//     double dy = 0.0;
+//     double dz = 0.0;
+//     double r = 0.0;
+//     double eps24 =0.0;
+//     double sig6 = 0.0;
+//     int t1 = 0;
+//     int t2 = 0;
+//     double f = 0.0;
+
+//     double* dx = new double[N];  // Stores x[i] - x[j] for all j
+//     double* dy = new double[N];  // Stores y[i] - y[j] for all j
+//     double* dz = new double[N];  // Stores z[i] - z[j] for all j
+//     double* r2 = new double[N]; 
+
+//     double r8 = 0.0;
+//     double r2 = 0.0;
+//     // Loop over all pairs of particles
+
+//     for (int i = 0; i < N; i++) {
+//         for (int j = i + 1; j < N; j++) {
+//             // Compute distance components
+//             dx = x[i] - x[j];
+//             dy = y[i] - y[j];
+//             dz = z[i] - z[j];
+
+//             // Compute squared distance
+//             r2 = dx * dx + dy * dy + dz * dz;
+//             if (r2 > 0) {
+                
+//                 if (test=='y'){
+//                     r= sqrt(r2);
+                
+//                     if (r<min_sep){
+//                         min_sep=r; //For Unit Testing
+//                     }
+//                 }
+
+//                 t1 = type[i];
+//                 t2 = type[j];
+//                 eps24 = epsilon24[t1][t2];
+//                 sig6 = sigma6[t1][t2];
+//                 r8=r2*r2*r2*r2;
+//                 f = eps24 * (((2*sig6*sig6*r2)/(r8*r8)) -sig6/r8);
+                    
+//                 fx[i] += f * dx;
+//                 fy[i] += f * dy;
+//                 fz[i] += f * dz;
+//                 fx[j] -= f * dx;
+//                 fy[j] -= f * dy;    
+//                 fz[j] -= f * dz;
+//     }}}}
+void compute_forcesopt(double* x, double* y, double* z, double* fx, double* fy, double* fz, int* type, int N, double& min_sep, char test) {
     fill(fx, fx + N, 0.0);
     fill(fy, fy + N, 0.0);
     fill(fz, fz + N, 0.0);
 
-    // Lennard-Jones parameters
-    const double epsilon[2][2] = {{3.0, 15.0}, {15.0, 60.0}};
+    const double epsilon24[2][2] = {{72.0, 360.0}, {360.0, 1440.0}};
     const double sigma6[2][2] = {{1.0, 64.0}, {64.0, 729.0}};
 
-    double dx = 0.0;
-    double dy = 0.0;
-    double dz = 0.0;
-    double r = 0.0;
-    double eps =0.0;
-    double sig6 = 0.0;
-    int t1 = 0;
-    int t2 = 0;
-    double f = 0.0;
-    
-    double r8 = 0.0;
-    double r2 = 0.0;
-    // Loop over all pairs of particles
+    for (int i = 0; i < N - 1; i++) {
+        int len = N - i - 1;  // Remaining pairs
+        double dx[len], dy[len], dz[len];
 
-    for (int i = 0; i < N; i++) {
-        for (int j = i + 1; j < N; j++) {
-            // Compute distance components
-            dx = x[i] - x[j];
-            dy = y[i] - y[j];
-            dz = z[i] - z[j];
+        
+        cblas_dcopy(len, x + i + 1, 1, dx, 1);
+        cblas_daxpy(len, -1.0, x + i, 0, dx, 1);
 
-            // Compute squared distance
-            r2 = dx * dx + dy * dy + dz * dz;
-            if (r2 > 0) {
-                
+        cblas_dcopy(len, y + i + 1, 1, dy, 1);
+        cblas_daxpy(len, -1.0, y + i, 0, dy, 1);
+
+        cblas_dcopy(len, z + i + 1, 1, dz, 1);
+        cblas_daxpy(len, -1.0, z + i, 0, dz, 1);
+
+        
+        double r2[len];
+        for (int j = 0; j < len; j++) {
+            r2[j] = dx[j] * dx[j] + dy[j] * dy[j] + dz[j] * dz[j];
+            
+            if (r2[j] > 0) {
                 if (test=='y'){
-                    r= sqrt(r2);
-                
-                    if (r<min_sep){
-                        min_sep=r; //For Unit Testing
-                    }
+                            double r= sqrt(r2[j]);       
+                            if (r<min_sep){
+                            min_sep=r; 
+                            }
                 }
 
-                t1 = type[i];
-                t2 = type[j];
-                eps = epsilon[t1][t2];
-                sig6 = sigma6[t1][t2];
-                r8=r2*r2*r2*r2;
-                f = 24 * eps * (((2*sig6*sig6*r2)/(r8*r8)) -sig6/r8);
-                    
-                fx[i] += f * dx;
-                fy[i] += f * dy;
-                fz[i] += f * dz;
-                fx[j] -= f * dx;
-                fy[j] -= f * dy;    
-                fz[j] -= f * dz;
-    }}}}
+                int t1 = type[i], t2 = type[i + j + 1];
+                double eps24 = epsilon24[t1][t2];
+                double sig6 = sigma6[t1][t2];
+
+                double r8 = r2[j] * r2[j] * r2[j] * r2[j];
+                double f = -eps24 * (((2 * sig6 * sig6 * r2[j]) / (r8 * r8)) - (sig6 / r8));
+                
+                fx[i] += f * dx[j];
+                fy[i] += f * dy[j];
+                fz[i] += f * dz[j];
+
+                fx[i + j + 1] -= f * dx[j];
+                fy[i + j + 1] -= f * dy[j];
+                fz[i + j + 1] -= f * dz[j];
+            }
+        }
+    }
+}
 
 void update_positions(double* x, double* y, double* z, double* vx, double* vy, double* vz, int N, double dt) {
     cblas_daxpy(N, dt, vx, 1, x, 1);  // x = dt * vx + x
@@ -408,7 +466,7 @@ int main(int argc, char** argv) {
         ("Ly", po::value<double>(&Ly)->default_value(20.0), "y length (Angstroms)")
         ("Lz", po::value<double>(&Lz)->default_value(20.0), "z length (Angstroms)")
         ("dt", po::value<double>(&dt)->default_value(0.001), "Time step")
-        ("T", po::value<double>(&T_tot)->default_value(50.0), "Final time")
+        ("T", po::value<double>(&T_tot)->default_value(10.0), "Final time")
         ("N", po::value<int>(&N)->default_value(8), "Number of particles")
         ("percent-type1", po::value<double>(&percent_type1)->default_value(10.0), "Percentage of type 1 particles")
         ("ic-one", "Initial condition: one stationary particle")
@@ -503,7 +561,7 @@ int main(int argc, char** argv) {
                               << vx[i] << " " << vy[i] << " " << vz[i] << "\n";
             }
         }
-        compute_forces(x, y, z, fx, fy, fz, type, N, min_sep,test);
+        compute_forcesopt(x, y, z, fx, fy, fz, type, N, min_sep,test);
         // update_velocities(vx, vy, vz, fx, fy, fz, m0, m1, N, dt, percent_type1);
         update_velocities(vx, vy, vz, fx, fy, fz, m, N, dt);
 
