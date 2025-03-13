@@ -31,7 +31,7 @@ bool far_enough(double x, double y, double z, double* x_arr, double* y_arr, doub
         return true;  // Far enough, accept
     } 
 
-void init_particle(double* x, double* y, double* z, double* vx, double* vy, double* vz, int* type, double* m,int N, double Lx, double Ly, double Lz,double m0, double m1, double percent_type1,std::string initial_condition) {
+void init_particle(double* x, double* y, double* z, double* vx, double* vy, double* vz, int* type, double* m,int N, double Lx, double Ly, double Lz,double m0, double m1, double& percent_type1,std::string initial_condition) {
     srand(time(0));
 
     if (initial_condition == "ic-one") {
@@ -39,12 +39,14 @@ void init_particle(double* x, double* y, double* z, double* vx, double* vy, doub
         x[0] = 10.0; y[0] = 10.0; z[0] = 10.0;
         vx[0] = 0.0; vy[0] = 0.0; vz[0] = 0.0;
         type[0] = 0; m[0] = m0;
+        percent_type1=0.0;
     } 
     else if (initial_condition == "ic-one-vel") {
         // **Test Case 2: One moving particle**
         x[0] = 10.0; y[0] = 10.0; z[0] = 10.0;
         vx[0] = 5.0; vy[0] = 2.0; vz[0] = 1.0;
         type[0] = 0; m[0] = m0;
+        percent_type1=0.0;
     } 
     else if (initial_condition == "ic-two") {
         // **Test Case 3: Two bouncing particles**
@@ -55,6 +57,7 @@ void init_particle(double* x, double* y, double* z, double* vx, double* vy, doub
         x[1] = 11.5; y[1] = 10.0; z[1] = 10.0;
         vx[1] = 0.0; vy[1] = 0.0; vz[1] = 0.0;
         type[1] = 0; m[1] = m0;
+        percent_type1=0.0;
     }
     else if (initial_condition == "ic-two-pass1") {
         // **Test Case 4: Two passing particles**
@@ -65,6 +68,7 @@ void init_particle(double* x, double* y, double* z, double* vx, double* vy, doub
         x[1] = 11.5; y[1] = 8.5; z[1] = 10.0;
         vx[1] = -0.5; vy[1] = 0.0; vz[1] = 0.0;
         type[1] = 0; m[1] = m0;
+        percent_type1=0.0;
     }
     else if (initial_condition == "ic-two-pass2") {
         // **Test Case 5: Two passing particles close**
@@ -75,6 +79,7 @@ void init_particle(double* x, double* y, double* z, double* vx, double* vy, doub
         x[1] = 11.5; y[1] = 8.7; z[1] = 10.0;
         vx[1] = -0.5; vy[1] = 0.0; vz[1] = 0.0;
         type[1] = 0; m[1] = m0;
+        percent_type1=0.0;
     }
     else if (initial_condition == "ic-two-pass3") {
         // **Test Case 6: Two passing heavy particles**
@@ -85,6 +90,7 @@ void init_particle(double* x, double* y, double* z, double* vx, double* vy, doub
         x[1] = 11.5; y[1] = 8.7; z[1] = 10.0;
         vx[1] = -0.5; vy[1] = 0.0; vz[1] = 0.0;
         type[1] = 1; m[1] = m1;
+        percent_type1=100.0;
     }
     else if (initial_condition == "ic-random") {
         // **Random initialization for N particles**
@@ -167,7 +173,7 @@ void compute_forces(double* x, double* y, double* z, double* fx, double* fy, dou
                 eps = epsilon[t1][t2];
                 sig6 = sigma6[t1][t2];
                 r8=r2*r2*r2*r2;
-                f = 24 * eps * (((2*sig6*sig6)/(r8*r8)) -sig6/r8);
+                f = 24 * eps * (((2*sig6*sig6*r2)/(r8*r8)) -sig6/r8);
                     
                 fx[i] += f * dx;
                 fy[i] += f * dy;
@@ -178,15 +184,33 @@ void compute_forces(double* x, double* y, double* z, double* fx, double* fy, dou
     }}}}
 
 void update_positions(double* x, double* y, double* z, double* vx, double* vy, double* vz, int N, double dt) {
-    for (int i = 0; i < N; i++) {
-        x[i] += dt * vx[i];
-        y[i] += dt * vy[i];
-        z[i] += dt * vz[i];
-    }
+    cblas_daxpy(N, dt, vx, 1, x, 1);  // x = dt * vx + x
+    cblas_daxpy(N, dt, vy, 1, y, 1);  // y = dt * vy + y
+    cblas_daxpy(N, dt, vz, 1, z, 1);  // z = dt * vz + z
 }
     
 
+// void update_velocities(double* vx, double* vy, double* vz, double* fx, double* fy, double* fz, double m0,double m1, int N, double dt, double percent_type1) {
+    // int N1 = static_cast<int>(N * percent_type1 / 100.0); // Number of type 1 particles
+    // int N0 = N - N1; // Number of type 0 particles
+
+    // double factor0 = dt / m0;   // For type 0 particles (mass = 1)
+    // double factor1 = dt / m1;  // For type 1 particles (mass = 10)
+
+    // // Apply daxpy separately for type 1 and type 0 particles
+    // if (N1 > 0) {
+    //     cblas_daxpy(N1, factor1, fx, 1, vx, 1);
+    //     cblas_daxpy(N1, factor1, fy, 1, vy, 1);
+    //     cblas_daxpy(N1, factor1, fz, 1, vz, 1);
+    // }
+
+    // if (N0 > 0) {
+    //     cblas_daxpy(N0, factor0, fx + N1, 1, vx + N1, 1);
+    //     cblas_daxpy(N0, factor0, fy + N1, 1, vy + N1, 1);
+    //     cblas_daxpy(N0, factor0, fz + N1, 1, vz + N1, 1);
+    // }
 void update_velocities(double* vx, double* vy, double* vz, double* fx, double* fy, double* fz, double* m, int N, double dt) {
+
     for (int i = 0; i < N; i++) {
         vx[i] += dt * fx[i] / m[i];
         vy[i] += dt * fy[i] / m[i];
@@ -480,11 +504,13 @@ int main(int argc, char** argv) {
             }
         }
         compute_forces(x, y, z, fx, fy, fz, type, N, min_sep,test);
+        // update_velocities(vx, vy, vz, fx, fy, fz, m0, m1, N, dt, percent_type1);
         update_velocities(vx, vy, vz, fx, fy, fz, m, N, dt);
+
         update_positions(x, y, z, vx, vy, vz, N, dt);
         
         
-        if (test='y') {
+        if (test=='y') {
             unit_tests(initial_condition, time, min_sep, x, y, vx, vy, N, Lx, Ly,end);
         }
 
@@ -494,7 +520,7 @@ int main(int argc, char** argv) {
     }
 
     end=true;
-    if (test='y') {
+    if (test=='y') {
         unit_tests(initial_condition, time, min_sep, x, y, vx, vy, N, Lx, Ly,end);
     }
 
