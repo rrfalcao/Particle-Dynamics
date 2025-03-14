@@ -3,7 +3,7 @@ project(MolecularDynamics)
 
 # Require C++17
 set(CMAKE_CXX_STANDARD 17)
-# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2 -Wall")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2 -Wall")
 
 # set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}) - This moves md to the source file so the text outputs can be plotted
 
