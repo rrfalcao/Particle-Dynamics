@@ -126,20 +126,20 @@ void compute_forces(double* x, double* y, double* z, double* fx, double* fy, dou
     fill(fz, fz + N, 0.0);
 
     // Lennard-Jones parameters
-    const double epsilon[2][2] = {{3.0, 15.0}, {15.0, 60.0}};
-    const double sigma[2][2] = {{1.0, 2.0}, {2.0, 3.0}};
+    const double epsilon24[2][2] = {{72.0, 360.0}, {360.0, 1440.0}};
+    const double sigma6[2][2] = {{1.0, 64.0}, {64.0, 729.0}};
 
     double dx = 0.0;
     double dy = 0.0;
     double dz = 0.0;
     double r = 0.0;
-    double eps =0.0;
-    double sig = 0.0;
+    double eps24 =0.0;
+    double sig6 = 0.0;
     int t1 = 0;
     int t2 = 0;
     double f = 0.0;
     
-    double sig_r6 = 0.0;
+    double r6 = 0.0;
     double r2 = 0.0;
     // Loop over all pairs of particles
 
@@ -163,10 +163,10 @@ void compute_forces(double* x, double* y, double* z, double* fx, double* fy, dou
 
                 t1 = type[i];
                 t2 = type[j];
-                eps = epsilon[t1][t2];
-                sig = sigma[t1][t2];
-                sig_r6 = pow(sig / r, 6);
-                f = 24 * eps * (2 * sig_r6 * sig_r6 - sig_r6) / (r2);
+                eps24 = epsilon24[t1][t2];
+                sig6 = sigma6[t1][t2];
+                r6=r2*r2*r2;
+                f = eps24 * sig6*(2*sig6 -r6) / (r6*r6*r2);
 
                 fx[i] += f * dx;
                 fy[i] += f * dy;
