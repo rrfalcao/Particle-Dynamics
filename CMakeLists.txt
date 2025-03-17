@@ -11,7 +11,7 @@ find_package(Boost REQUIRED COMPONENTS program_options)
 include_directories(${Boost_INCLUDE_DIRS})  
 find_package(BLAS REQUIRED)
 
-add_executable(md maincmdtests.cpp)
+add_executable(md mdmP.cpp)
 target_link_libraries(md ${Boost_LIBRARIES} ${BLAS_LIBRARIES})
 
 add_custom_target(default ALL DEPENDS md)
