@@ -38,3 +38,17 @@ add_custom_target(run_tests
 #     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 #     COMMENT "Running Molecular Dynamics Simulation"
 # )
+# 🔹 Doxygen Documentation
+
+find_package(Doxygen REQUIRED)
+set(DOXYGEN_IN ${CMAKE_SOURCE_DIR}/Doxyfile)
+set(DOXYGEN_OUT ${CMAKE_BINARY_DIR}/docs)
+
+add_custom_target(doc
+    
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${DOXYGEN_OUT} 
+    COMMAND doxygen ${DOXYGEN_IN}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Generating API documentation with Doxygen"
+    VERBATIM
+)
