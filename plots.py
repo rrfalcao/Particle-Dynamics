@@ -1,3 +1,4 @@
+
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
@@ -5,7 +6,7 @@ import matplotlib
 from mpl_toolkits.mplot3d import Axes3D
 
 matplotlib.use("TkAgg")  # Ensure plots open in a separate window
-
+limit =20
 # Load kinetic energy data and plot
 def plot_kinetic_energy(filename="kinetic_energy.txt"):
     data = np.loadtxt(filename)
@@ -29,8 +30,8 @@ def animate_xy_plane(filename="particles.txt"):
 
     # Create figure for animation
     fig, ax = plt.subplots(figsize=(6, 6))
-    ax.set_xlim(0,20)  # X limits
-    ax.set_ylim(0,20)  # Y limits
+    ax.set_xlim(0,limit)  # X limits
+    ax.set_ylim(0,limit)  # Y limits
     ax.set_xlabel("X Position")
     ax.set_ylabel("Y Position")
     ax.set_title("Particle Positions in XY Plane (Animation)")
@@ -77,9 +78,9 @@ def animate_3d_trajectory(filename="particles.txt"):
     ax.set_title("Particle Positions in 3D (Animation)")
 
     # Set axis limits based on data
-    ax.set_xlim(0,20)  # X limits
-    ax.set_ylim(0,20)  # Y limits
-    ax.set_zlim(0,20)  # Z limits
+    ax.set_xlim(0,limit)  # X limits
+    ax.set_ylim(0,limit)  # Y limits
+    ax.set_zlim(0,limit)  # Z limits
 
     # Initialize scatter plot for particles
     scatter = ax.scatter([], [], [], c=[], marker='o')

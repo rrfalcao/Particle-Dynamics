@@ -186,39 +186,44 @@ void compute_forces(double* x, double* y, double* z, double* fx, double* fy, dou
 
 
 void update_positions(double* x, double* y, double* z, double* vx, double* vy, double* vz, int N, double dt) {
-    cblas_daxpy(N, dt, vx, 1, x, 1);  // x = dt * vx + x
-    cblas_daxpy(N, dt, vy, 1, y, 1);  // y = dt * vy + y
-    cblas_daxpy(N, dt, vz, 1, z, 1);  // z = dt * vz + z
+    // cblas_daxpy(N, dt, vx, 1, x, 1);  // x = dt * vx + x
+    // cblas_daxpy(N, dt, vy, 1, y, 1);  // y = dt * vy + y
+    // cblas_daxpy(N, dt, vz, 1, z, 1);  // z = dt * vz + z
+    for (int i = 0; i < N; i++) {
+        x[i] += dt * vx[i];
+        y[i] += dt * vy[i];
+        z[i] += dt * vz[i];
+    }
 }
     
 
-void update_velocities(double* vx, double* vy, double* vz, double* fx, double* fy, double* fz, double m0,double m1, int N, double dt, double percent_type1) {
-    int N1 = static_cast<int>(N * percent_type1 / 100.0); // Number of type 1 particles
-    int N0 = N - N1; // Number of type 0 particles
+// void update_velocities(double* vx, double* vy, double* vz, double* fx, double* fy, double* fz, double m0,double m1, int N, double dt, double percent_type1) {
+//     int N1 = static_cast<int>(N * percent_type1 / 100.0); // Number of type 1 particles
+//     int N0 = N - N1; // Number of type 0 particles
 
-    double factor0 = dt / m0;   // For type 0 particles (mass = 1)
-    double factor1 = dt / m1;  // For type 1 particles (mass = 10)
+//     double factor0 = dt / m0;   // For type 0 particles (mass = 1)
+//     double factor1 = dt / m1;  // For type 1 particles (mass = 10)
 
-    // Apply daxpy separately for type 1 and type 0 particles
-    if (N1 > 0) {
-        cblas_daxpy(N1, factor1, fx, 1, vx, 1);
-        cblas_daxpy(N1, factor1, fy, 1, vy, 1);
-        cblas_daxpy(N1, factor1, fz, 1, vz, 1);
-    }
-    
-    if (N0 > 0) {
-        cblas_daxpy(N0, factor0, fx + N1, 1, vx + N1, 1);
-        cblas_daxpy(N0, factor0, fy + N1, 1, vy + N1, 1);
-        cblas_daxpy(N0, factor0, fz + N1, 1, vz + N1, 1);
-    }}
-// void update_velocities(double* vx, double* vy, double* vz, double* fx, double* fy, double* fz, double* m, int N, double dt) {
-
-//     for (int i = 0; i < N; i++) {
-//         vx[i] += dt * fx[i] / m[i];
-//         vy[i] += dt * fy[i] / m[i];
-//         vz[i] += dt * fz[i] / m[i];
+//     // Apply daxpy separately for type 1 and type 0 particles
+//     if (N1 > 0) {
+//         cblas_daxpy(N1, factor1, fx, 1, vx, 1);
+//         cblas_daxpy(N1, factor1, fy, 1, vy, 1);
+//         cblas_daxpy(N1, factor1, fz, 1, vz, 1);
 //     }
-// }
+    
+//     if (N0 > 0) {
+//         cblas_daxpy(N0, factor0, fx + N1, 1, vx + N1, 1);
+//         cblas_daxpy(N0, factor0, fy + N1, 1, vy + N1, 1);
+//         cblas_daxpy(N0, factor0, fz + N1, 1, vz + N1, 1);
+//     }}
+void update_velocities(double* vx, double* vy, double* vz, double* fx, double* fy, double* fz, double* m, int N, double dt) {
+
+    for (int i = 0; i < N; i++) {
+        vx[i] += dt * fx[i] / m[i];
+        vy[i] += dt * fy[i] / m[i];
+        vz[i] += dt * fz[i] / m[i];
+    }
+}
 
 
 void apply_boundary_conditions(double* x, double* y, double* z, double* vx, double* vy, double* vz, int N, double Lx, double Ly, double Lz) {
@@ -482,10 +487,7 @@ int main(int argc, char** argv) {
     init_particle(x, y, z, vx, vy, vz, type, m, N, Lx, Ly, Lz, m0, m1,percent_type1, initial_condition);
 
 
-    // Temperature Change - only if temp is set
-    if (temperature > 0.0) {
-        scale_velocities(vx, vy, vz, m, N, temperature);
-    }
+    
 
     // Create text files in overwrite mode
     std::ofstream particle_file("particles.txt", std::ofstream::trunc);
@@ -499,6 +501,10 @@ int main(int argc, char** argv) {
     int writestep=static_cast<int>(0.1 / dt); // Cast double division to int
     for (int t = 0; t < steps; t++) {
         
+        
+        compute_forces(x, y, z, fx, fy, fz, type, N, min_sep,test);
+        // update_velocities(vx, vy, vz, fx, fy, fz, m0, m1, N, dt, percent_type1);
+        update_velocities(vx, vy, vz, fx, fy, fz, m, N, dt);
         if (t%writestep==0) {  // Write data every 0.1 time units
             double K = compute_KE(vx, vy, vz, m, N);
             kinetic_file << time << " " << K << "\n";
@@ -509,9 +515,10 @@ int main(int argc, char** argv) {
                               << vx[i] << " " << vy[i] << " " << vz[i] << "\n";
             }
         }
-        compute_forces(x, y, z, fx, fy, fz, type, N, min_sep,test);
-        update_velocities(vx, vy, vz, fx, fy, fz, m0, m1, N, dt, percent_type1);
-        // update_velocities(vx, vy, vz, fx, fy, fz, m, N, dt);
+        // Temperature Change - only if temp is set
+        if (temperature > 0.0) {
+            scale_velocities(vx, vy, vz, m, N, temperature);
+        }
         // cblas_daxpy(N, dt, vx, 1, x, 1);  // x = dt * vx + x
         // cblas_daxpy(N, dt, vy, 1, y, 1);  // y = dt * vy + y
         // cblas_daxpy(N, dt, vz, 1, z, 1);
