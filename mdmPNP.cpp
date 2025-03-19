@@ -193,49 +193,33 @@ bool far_enough(double x, double y, double z, double* x_arr, double* y_arr, doub
     const double epsilon24[2][2] = {{72.0, 360.0}, {360.0, 1440.0}};
     const double sigma6[2][2] = {{1.0, 64.0}, {64.0, 729.0}};
 
-    double dx = 0.0;
-    double dy = 0.0;
-    double dz = 0.0;
+   
     double r = 0.0;
-    double eps24 =0.0;
-    double sig6 = 0.0;
-    int t1 = 0;
-    int t2 = 0;
-    double f = 0.0;
-
-    double r6 = 0.0;
-    double r2 = 0.0;
+    
     // Loop over all pairs of particles
 
-    #pragma omp parallel for reduction(+:fx[:N], fy[:N], fz[:N]) schedule(dynamic)
-    for (int k = 0; k < N * (N - 1) / 2; k++) {
-        int i = floor((2 * N - 1 - sqrt((2 * N - 1) * (2 * N - 1) - 8 * k)) / 2);
-        int j = k - (i * (2 * N - i - 1) / 2) + i + 1;
-
+    #pragma omp parallel for schedule(dynamic)
+for (int i = 0; i < N; i++) {
+    #pragma omp simd
+    for (int j = i + 1; j < N; j++) {
         double dx = x[i] - x[j];
         double dy = y[i] - y[j];
         double dz = z[i] - z[j];
 
         double r2 = dx * dx + dy * dy + dz * dz;
-        if (r2 > 0) {
-            if (test=='y'){
-                r= sqrt(r2);
-            
-                if (r<min_sep){
-                    min_sep=r; //For Unit Testing
-                }
-            }
-            double r6 = r2 * r2 * r2;
-            double f = epsilon24[type[i]][type[j]] * sigma6[type[i]][type[j]] * (2 * sigma6[type[i]][type[j]] - r6) / (r6 * r6 * r2);
-            
-            fx[i] += f * dx;
-            fy[i] += f * dy;
-            fz[i] += f * dz;
-            fx[j] -= f * dx;
-            fy[j] -= f * dy;
-            fz[j] -= f * dz;
-        }
-}}
+        double r6 = r2 * r2 * r2;
+        double f = epsilon24[type[i]][type[j]] * sigma6[type[i]][type[j]] * (2 * sigma6[type[i]][type[j]] - r6) / (r6 * r6 * r2);
+
+        fx[i] += f * dx;
+        fy[i] += f * dy;
+        fz[i] += f * dz;
+        fx[j] -= f * dx;
+        fy[j] -= f * dy;
+        fz[j] -= f * dz;
+    }
+}
+
+}
 
 /**
  * @brief Updates particle positions using velocity integration.
@@ -249,12 +233,17 @@ bool far_enough(double x, double y, double z, double* x_arr, double* y_arr, doub
  * @param N Number of particles.
  * @param dt Time step size.
  */
-void update_positions(double* x, double* y, double* z, double* vx, double* vy, double* vz, int N, double dt) {
+void update_positions(double* x, double* y, double* z, double* vx, double* vy, double* vz, int N, double dt,double& max_dim) {
     #pragma omp parallel for
     for(int i=0; i<N; i++){
+        // Check if particles leave the box
+        if (x[i] >max_dim ){
+            max_dim=x[i];;
+        }
         x[i] += dt * vx[i];
         y[i] += dt * vy[i];
-        z[i] += dt * vz[i];
+        z[i] += dt * vz[i]; 
+        
 }}
     
 /**
@@ -382,7 +371,7 @@ void scale_velocities(double* vx, double* vy, double* vz, double* m, int N, doub
  * @param Ly Length of the simulation box in y direction.
  * @param end Boolean flag indicating if this is the final test run.
  */
-void unit_tests(std::string test_flag, double time, double min_separation, double* x, double* y, double* vx, double* vy, int N, double Lx, double Ly,bool end) {
+void unit_tests(std::string test_flag, double min_separation, double* x, double* y, double* vx, double* vy, int N, double Lx, double Ly,bool end) {
 
     
     static bool first_collision1_detected = false;
@@ -407,7 +396,7 @@ void unit_tests(std::string test_flag, double time, double min_separation, doubl
             if (x[0] <= 0.0 || x[0] >= Lx || y[0] <= 0.0 || y[0] >= Ly) {
                
                 first_collision1_detected = true;
-                cout << "PASS: First wall collision at ("  << x[0] << ", " << y[0]  << ") at t = " << time << "\n";
+                cout << "PASS: First wall collision at ("  << x[0] << ", " << y[0]  << ") "<<endl;
             }
         }
     } 
@@ -513,7 +502,11 @@ void unit_tests(std::string test_flag, double time, double min_separation, doubl
  */
 
 int main(int argc, char** argv) {
+
+    double start_time, end_time;
     
+    start_time = omp_get_wtime();  // Start timer
+
     double Lx = 20.0, Ly = 20.0, Lz = 20.0;
     double dt = 0.001, T_tot = 50.0;
     int N = 8;
@@ -591,6 +584,7 @@ int main(int argc, char** argv) {
     double* fz = new double[N];
     double* m = new double[N]; 
     int* type = new int[N];
+    double max_dim=0.0;
     double m0 = 1.0;
     double m1 = 10.0;
     char test = 'y';
@@ -602,59 +596,44 @@ int main(int argc, char** argv) {
     init_particle(x, y, z, vx, vy, vz, type, m, N, Lx, Ly, Lz, m0, m1,percent_type1, initial_condition);
         
     
-
-    // Create text files in overwrite mode
-    std::ofstream particle_file("particles.txt", std::ofstream::trunc);
-    std::ofstream kinetic_file("kinetic_energy.txt", std::ofstream::trunc);
-
-    
     /////////////////////// Numerical Loop /////////////////////////
     int steps = T_tot / dt;
 
-    double time=0.0;
-    int writestep=static_cast<int>(0.1 / dt); // Cast double division to int
     for (int t = 0; t < steps; t++) {
         
-        if (t%writestep==0) {  // Write data every 0.1 time units
-            double K = compute_KE(vx, vy, vz, m, N);
-            kinetic_file << time << " " << K << "\n";
-
-            for (int i = 0; i < N; i++) {
-                particle_file << time << " " << i << " " << type[i] << " "
-                              << x[i] << " " << y[i] << " " << z[i] << " "
-                              << vx[i] << " " << vy[i] << " " << vz[i] << "\n";
-            }
-        }
         compute_forces(x, y, z, fx, fy, fz, type, N, min_sep,test);
         update_velocities(vx, vy, vz, fx, fy, fz, m, N, dt);
         // Temperature Change - only if temp is set
         if (temperature > 0.0) {
             scale_velocities(vx, vy, vz, m, N, temperature);
         }
-        update_positions(x, y, z, vx, vy, vz, N, dt);
+        update_positions(x, y, z, vx, vy, vz, N, dt,max_dim);
         
         
         if (test=='y') {
-            unit_tests(initial_condition, time, min_sep, x, y, vx, vy, N, Lx, Ly,end);
+            unit_tests(initial_condition, min_sep, x, y, vx, vy, N, Lx, Ly,end);
         }
 
         apply_boundary_conditions(x, y, z, vx, vy, vz, N, Lx, Ly, Lz);
 
-        time += dt;
+        
     }
 
     end=true;
     if (test=='y') {
-        unit_tests(initial_condition, time, min_sep, x, y, vx, vy, N, Lx, Ly,end);
+        unit_tests(initial_condition, min_sep, x, y, vx, vy, N, Lx, Ly,end);
     }
-
+    bool out = max_dim>Lx;
+    cout<<"Particles have left the box: "<<out<<" Max x dimension: "<<max_dim<<endl;
     /////// Cleanup Section ///////////
     delete[] x; delete[] y; delete[] z;
     delete[] vx; delete[] vy; delete[] vz;
     delete[] fx; delete[] fy; delete[] fz;
     delete[] type; delete[] m;
-    particle_file.close();
-    kinetic_file.close();
+    end_time = omp_get_wtime();  // End timer
+    
+    double elapsed_time = end_time - start_time;
+    cout << "Execution time: " << elapsed_time << " seconds\n";
     ///////////////////////////////////
     
 }
