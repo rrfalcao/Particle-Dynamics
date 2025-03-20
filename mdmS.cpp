@@ -9,7 +9,7 @@
  * @author Ridge
  * @date 2025-03-13
  */
-
+#include <chrono>
 #include <iostream>
 // #include <mpi.h>
 #include <vector>
@@ -537,7 +537,7 @@ void unit_tests(std::string test_flag, double time, double min_separation, doubl
  */
 
 int main(int argc, char** argv) {
-    
+    auto start_time = std::chrono::high_resolution_clock::now();
     double Lx = 20.0, Ly = 20.0, Lz = 20.0;
     double dt = 0.001, T_tot = 50.0;
     int N = 8;
@@ -629,9 +629,7 @@ int main(int argc, char** argv) {
     
 
     // Create text files in overwrite mode
-    ofstream particle_file("particles.txt", std::ofstream::trunc);
-    ofstream kinetic_file("kinetic_energy.txt", std::ofstream::trunc);
-
+    
     if (temperature > 0.0) {
         scale_velocities(vx, vy, vz, m0, m1, N0, N1, temperature);
     }
@@ -639,19 +637,9 @@ int main(int argc, char** argv) {
     int steps = T_tot / dt;
 
     double time=0.0;
-    int writestep=static_cast<int>(0.1 / dt); // Cast double division to int
     for (int t = 0; t < steps; t++) {
         
-        if (t%writestep==0) {  // Write data every 0.1 time units
-            double K = compute_KE(vx, vy, vz, m0, m1, N0, N1);
-            kinetic_file << time << " " << K << "\n";
-
-            for (int i = 0; i < N; i++) {
-                particle_file << time << " " << i << " " << type[i] << " "
-                              << x[i] << " " << y[i] << " " << z[i] << " "
-                              << vx[i] << " " << vy[i] << " " << vz[i] << "\n";
-            }
-        }
+        
         compute_forces(x, y, z, fx, fy, fz, type, N, min_sep,test);
         update_velocities(vx, vy, vz, fx, fy, fz, m0, m1, N0, N1, dt);
         // Temperature Change - only if temp is set
@@ -680,8 +668,9 @@ int main(int argc, char** argv) {
     delete[] vx; delete[] vy; delete[] vz;
     delete[] fx; delete[] fy; delete[] fz;
     delete[] type;
-    particle_file.close();
-    kinetic_file.close();
+    auto end_time = std::chrono::high_resolution_clock::now();
+    double time_new = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+    cout<<"Time taken: "<<time_new/1000<<" s"<<endl;
     ///////////////////////////////////
     
 }

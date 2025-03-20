@@ -194,30 +194,37 @@ bool far_enough(double x, double y, double z, double* x_arr, double* y_arr, doub
     const double sigma6[2][2] = {{1.0, 64.0}, {64.0, 729.0}};
 
    
-    double r = 0.0;
+    
     
     // Loop over all pairs of particles
 
     #pragma omp parallel for schedule(dynamic)
-for (int i = 0; i < N; i++) {
-    #pragma omp simd
-    for (int j = i + 1; j < N; j++) {
-        double dx = x[i] - x[j];
-        double dy = y[i] - y[j];
-        double dz = z[i] - z[j];
+    for (int i = 0; i < N; i++) {
+        #pragma omp simd
+        for (int j = i + 1; j < N; j++) {
+            double dx = x[i] - x[j];
+            double dy = y[i] - y[j];
+            double dz = z[i] - z[j];
 
-        double r2 = dx * dx + dy * dy + dz * dz;
-        double r6 = r2 * r2 * r2;
-        double f = epsilon24[type[i]][type[j]] * sigma6[type[i]][type[j]] * (2 * sigma6[type[i]][type[j]] - r6) / (r6 * r6 * r2);
+            double r2 = dx * dx + dy * dy + dz * dz;
+            // if (test=='y'){
+            //   double r= sqrt(r2);
+            
+            //     if (r<min_sep){
+            //         min_sep=r; //For Unit Testing
+            //     }
+            // }
+            double r6 = r2 * r2 * r2;
+            double f = epsilon24[type[i]][type[j]] * sigma6[type[i]][type[j]] * (2 * sigma6[type[i]][type[j]] - r6) / (r6 * r6 * r2);
 
-        fx[i] += f * dx;
-        fy[i] += f * dy;
-        fz[i] += f * dz;
-        fx[j] -= f * dx;
-        fy[j] -= f * dy;
-        fz[j] -= f * dz;
+            fx[i] += f * dx;
+            fy[i] += f * dy;
+            fz[i] += f * dz;
+            fx[j] -= f * dx;
+            fy[j] -= f * dy;
+            fz[j] -= f * dz;
+        }
     }
-}
 
 }
 
@@ -237,9 +244,10 @@ void update_positions(double* x, double* y, double* z, double* vx, double* vy, d
     #pragma omp parallel for
     for(int i=0; i<N; i++){
         // Check if particles leave the box
-        if (x[i] >max_dim ){
-            max_dim=x[i];;
-        }
+        // #pragma omp critical
+        // if (x[i] >max_dim ){
+        //     max_dim=x[i];
+        // }
         x[i] += dt * vx[i];
         y[i] += dt * vy[i];
         z[i] += dt * vz[i]; 
@@ -259,7 +267,7 @@ void update_positions(double* x, double* y, double* z, double* vx, double* vy, d
  * @param dt Time step.
  */
 void update_velocities(double* vx, double* vy, double* vz, double* fx, double* fy, double* fz, double* m, int N, double dt) {
-    #pragma omp parallel for
+    #pragma omp parallel for simd
     for (int i = 0; i < N; i++) {
         vx[i] += dt * fx[i] / m[i];
         vy[i] += dt * fy[i] / m[i];
@@ -303,7 +311,7 @@ void apply_boundary_conditions(double* x, double* y, double* z, double* vx, doub
 double compute_temperature(double* vx, double* vy, double* vz, double* m, int N) {
     double kinetic_energy = 0.0;
     double boltz=0.8314459920816467;
-    #pragma omp parallel for reduction(+:kinetic_energy)
+    #pragma omp parallel for simd reduction(+:kinetic_energy)
     for (int i = 0; i < N; i++) {
         kinetic_energy += 0.5 * m[i] * (vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i]);
     }
@@ -321,7 +329,7 @@ double compute_temperature(double* vx, double* vy, double* vz, double* m, int N)
  */
 double compute_KE(double* vx, double* vy, double* vz, double* m, int N) {
     double kinetic_energy = 0.0;
-    #pragma omp parallel for reduction(+:kinetic_energy)
+    #pragma omp parallel for simd reduction(+:kinetic_energy)
     for (int i = 0; i < N; i++) {
         kinetic_energy += 0.5 * m[i] * (vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i]);
     }
@@ -344,7 +352,7 @@ void scale_velocities(double* vx, double* vy, double* vz, double* m, int N, doub
     if (T_current == 0.0) return;  // Avoid division by zero
 
         double scale_factor = sqrt(T_target / T_current);
-    #pragma omp parallel
+    #pragma omp parallel for simd
     for (int i = 0; i < N; i++) {
         vx[i] *= scale_factor;
         vy[i] *= scale_factor;

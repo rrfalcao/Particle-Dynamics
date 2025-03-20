@@ -179,10 +179,8 @@ bool far_enough(double x, double y, double z, double* x_arr, double* y_arr, doub
  * @param test Flag for unit testing.
  */
 
- void compute_forces(double* x, double* y, double* z, double* fx, double* fy, double* fz, int* type, int N, double& min_sep,char test) {
-
-    // Reset forces
-    // #pragma omp parallel for simd
+ void compute_forces(double* x, double* y, double* z, double* fx, double* fy, double* fz, int* type, int N, double& min_sep, char test) {
+    // Reset forces efficiently using SIMD
     #pragma omp parallel for simd
     for (int i = 0; i < N; i++) {
         fx[i] = 0.0;
@@ -194,40 +192,58 @@ bool far_enough(double x, double y, double z, double* x_arr, double* y_arr, doub
     const double epsilon24[2][2] = {{72.0, 360.0}, {360.0, 1440.0}};
     const double sigma6[2][2] = {{1.0, 64.0}, {64.0, 729.0}};
 
-   
-    double r = 0.0;
-    
-    // Loop over all pairs of particles
+    int num_threads = omp_get_max_threads();  // Get available threads
+    int total_pairs = N * (N - 1) / 2;  // Total interactions
+    int chunk_size = total_pairs / num_threads; // Even work division
 
-    #pragma omp parallel for reduction(+:fx[:N], fy[:N], fz[:N]) schedule(dynamic)
-    for (int k = 0; k < N * (N - 1) / 2; k++) {
-        int i = floor((2 * N - 1 - sqrt((2 * N - 1) * (2 * N - 1) - 8 * k)) / 2);
-        int j = k - (i * (2 * N - i - 1) / 2) + i + 1;
+    // ** Use Thread-Private Buffers for Forces **
+    #pragma omp parallel
+    {
+        
+        double* fx_private = new double[N]();  // Local thread buffers
+        double* fy_private = new double[N]();
+        double* fz_private = new double[N]();
 
-        double dx = x[i] - x[j];
-        double dy = y[i] - y[j];
-        double dz = z[i] - z[j];
+        // ** Compute Forces with Static Scheduling **
+        #pragma omp for schedule(static, chunk_size)
+        for (int k = 0; k < total_pairs; k++) {
+            int i = floor((2 * N - 1 - sqrt((2 * N - 1) * (2 * N - 1) - 8 * k)) / 2);
+            int j = k - (i * (2 * N - i - 1) / 2) + i + 1;
 
-        double r2 = dx * dx + dy * dy + dz * dz;
-        if (r2 > 0) {
-            if (test=='y'){
-                r= sqrt(r2);
-            
-                if (r<min_sep){
-                    min_sep=r; //For Unit Testing
-                }
-            }
+            double dx = x[i] - x[j];
+            double dy = y[i] - y[j];
+            double dz = z[i] - z[j];
+
+            double r2 = dx * dx + dy * dy + dz * dz;
             double r6 = r2 * r2 * r2;
             double f = epsilon24[type[i]][type[j]] * sigma6[type[i]][type[j]] * (2 * sigma6[type[i]][type[j]] - r6) / (r6 * r6 * r2);
+
             
-            fx[i] += f * dx;
-            fy[i] += f * dy;
-            fz[i] += f * dz;
-            fx[j] -= f * dx;
-            fy[j] -= f * dy;
-            fz[j] -= f * dz;
+                fx_private[i] += f * dx;    
+                fy_private[i] += f * dy;
+                fz_private[i] += f * dz;
+                fx_private[j] -= f * dx;
+                fy_private[j] -= f * dy;
+                fz_private[j] -= f * dz;
+            
         }
-}}
+
+        // ** Reduction: Sum Thread-Private Buffers Into Global Force Arrays **
+        #pragma omp critical
+        {
+            for (int i = 0; i < N; i++) {
+                fx[i] += fx_private[i];
+                fy[i] += fy_private[i];
+                fz[i] += fz_private[i];
+            }
+        }
+
+        // Cleanup Thread-Local Memory
+        delete[] fx_private;
+        delete[] fy_private;
+        delete[] fz_private;
+    }
+}
 
 /**
  * @brief Updates particle positions using velocity integration.
@@ -242,11 +258,13 @@ bool far_enough(double x, double y, double z, double* x_arr, double* y_arr, doub
  * @param dt Time step size.
  */
 void update_positions(double* x, double* y, double* z, double* vx, double* vy, double* vz, int N, double dt,double& max_dim) {
-    double local_max_dim = max_dim;
-    #pragma omp parallel for simd
+    
+    #pragma omp parallel for 
     for(int i=0; i<N; i++){
         // Check if particles leave the box
-        local_max_dim = fmax(local_max_dim, x[i]);
+        if(x[i]>max_dim){
+            max_dim=x[i];
+        }
         x[i] += dt * vx[i];
         y[i] += dt * vy[i];
         z[i] += dt * vz[i]; 
@@ -601,13 +619,18 @@ int main(int argc, char** argv) {
         cout<<initial_condition<<endl;    }
 
     init_particle(x, y, z, vx, vy, vz, type, m, N, Lx, Ly, Lz, m0, m1,percent_type1, initial_condition);
-        
+    std::ofstream kinetic_file("kinetic_energy.txt", std::ofstream::trunc);
     
     /////////////////////// Numerical Loop /////////////////////////
     int steps = T_tot / dt;
-
+    double time=0.0;
+    int writestep=static_cast<int>(0.1 / dt); // Cast double division to int
     for (int t = 0; t < steps; t++) {
         
+        if (t%writestep==0) {  // Write data every 0.1 time units
+            double K = compute_KE(vx, vy, vz, m, N);
+            kinetic_file << time << " " << K << "\n";
+        }
         compute_forces(x, y, z, fx, fy, fz, type, N, min_sep,test);
         update_velocities(vx, vy, vz, fx, fy, fz, m, N, dt);
         // Temperature Change - only if temp is set
@@ -623,7 +646,7 @@ int main(int argc, char** argv) {
 
         apply_boundary_conditions(x, y, z, vx, vy, vz, N, Lx, Ly, Lz);
 
-        
+        time += dt;
     }
 
     end=true;
@@ -637,6 +660,7 @@ int main(int argc, char** argv) {
     delete[] vx; delete[] vy; delete[] vz;
     delete[] fx; delete[] fy; delete[] fz;
     delete[] type; delete[] m;
+    kinetic_file.close();
     end_time = omp_get_wtime();  // End timer
     
     double elapsed_time = end_time - start_time;

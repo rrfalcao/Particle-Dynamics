@@ -1,0 +1,14 @@
+### Start Wed Mar 19 15:20:28 2025
+# /apps/dev-studio/12.6/bin/../bin/er_archive -n -O /home/rf120/rf120/Particle-Dynamics/Particle-Dynamics/mdmPNP.er/er_archive.log /home/rf120/rf120/Particle-Dynamics/Particle-Dynamics/mdmPNP.er
+Copying `/home/rf120/rf120/Particle-Dynamics/Particle-Dynamics/mdmPNP'  to `/home/rf120/rf120/Particle-Dynamics/Particle-Dynamics/mdmPNP.er/archives/mdmPNP_plyGbeRLCK9'
+Copying `/usr/lib/x86_64-linux-gnu/libc.so.6'  to `/home/rf120/rf120/Particle-Dynamics/Particle-Dynamics/mdmPNP.er/archives/libc.so.6_dnWuQRcLhw9'
+Copying `/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.30'  to `/home/rf120/rf120/Particle-Dynamics/Particle-Dynamics/mdmPNP.er/archives/libstdc++.so.6.0.30_dnWuQRcLhw9'
+Copying `/usr/lib/x86_64-linux-gnu/libm.so.6'  to `/home/rf120/rf120/Particle-Dynamics/Particle-Dynamics/mdmPNP.er/archives/libm.so.6_dnWuQRcLhw9'
+Copying `/apps/dev-studio/12.6/lib/analyzer/amd64/runtime/libcollector.so'  to `/home/rf120/rf120/Particle-Dynamics/Particle-Dynamics/mdmPNP.er/archives/libcollector.so_kN_xj2QRtH5'
+Copying `/usr/lib/x86_64-linux-gnu/librt.so.1'  to `/home/rf120/rf120/Particle-Dynamics/Particle-Dynamics/mdmPNP.er/archives/librt.so.1_dnWuQRcLhw9'
+Copying `/usr/lib/x86_64-linux-gnu/libpthread.so.0'  to `/home/rf120/rf120/Particle-Dynamics/Particle-Dynamics/mdmPNP.er/archives/libpthread.so.0_dnWuQRcLhw9'
+Copying `/usr/lib/x86_64-linux-gnu/libdl.so.2'  to `/home/rf120/rf120/Particle-Dynamics/Particle-Dynamics/mdmPNP.er/archives/libdl.so.2_dnWuQRcLhw9'
+Copying `/usr/lib/x86_64-linux-gnu/libgcc_s.so.1'  to `/home/rf120/rf120/Particle-Dynamics/Particle-Dynamics/mdmPNP.er/archives/libgcc_s.so.1_dnWuQRcLhw9'
+Copying `/usr/lib/x86_64-linux-gnu/libgomp.so.1.0.0'  to `/home/rf120/rf120/Particle-Dynamics/Particle-Dynamics/mdmPNP.er/archives/libgomp.so.1.0.0_dnWuQRcLhw9'
+Copying `/usr/lib/x86_64-linux-gnu/libboost_program_options.so.1.74.0'  to `/home/rf120/rf120/Particle-Dynamics/Particle-Dynamics/mdmPNP.er/archives/libboost_program_options.so.1.74.0_dnWuQRcLhw9'
+Copying `/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2'  to `/home/rf120/rf120/Particle-Dynamics/Particle-Dynamics/mdmPNP.er/archives/ld-linux-x86-64.so.2_dnWuQRcLhw9'
