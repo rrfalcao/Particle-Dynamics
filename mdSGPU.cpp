@@ -20,9 +20,10 @@
 #include <limits>
 #include <fstream> 
 #include <boost/program_options.hpp>
+#include <cuda_runtime.h>
 namespace po = boost::program_options;
 using namespace std;
-
+#define BLOCK_SIZE 256
 /**
  * @brief Checks if a new particle is far enough from existing particles before placing it.
  * 
@@ -178,66 +179,87 @@ void init_particle(double* x, double* y, double* z, double* vx, double* vy, doub
  * @param test Flag for unit testing.
  */
 
-void compute_forces(double* x, double* y, double* z, double* fx, double* fy, double* fz, int* type, int N, double& min_sep,char test) {
+// Lennard-Jones constants
+__constant__ double epsilon24[2][2] = {{72.0, 360.0}, {360.0, 1440.0}};
+__constant__ double sigma6[2][2] = {{1.0, 64.0}, {64.0, 729.0}};
 
-    // Reset forces
-    fill(fx, fx + N, 0.0);
-    fill(fy, fy + N, 0.0);
-    fill(fz, fz + N, 0.0);
+/**
+ * @brief CUDA Kernel to compute Lennard-Jones forces in parallel.
+ */
+__global__ void compute_forces_gpu(double* x, double* y, double* z,
+                                   double* fx, double* fy, double* fz,
+                                   int* type, int N) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= N) return;
 
-    // Lennard-Jones parameters
-    const double epsilon24[2][2] = {{72.0, 360.0}, {360.0, 1440.0}};
-    const double sigma6[2][2] = {{1.0, 64.0}, {64.0, 729.0}};
+    double fx_i = 0.0, fy_i = 0.0, fz_i = 0.0;
 
-    double dx = 0.0;
-    double dy = 0.0;
-    double dz = 0.0;
-    double r = 0.0;
-    double eps24 =0.0;
-    double sig6 = 0.0;
-    int t1 = 0;
-    int t2 = 0;
-    double f = 0.0;
+    for (int j = 0; j < N; j++) {
+        if (i == j) continue;  // Avoid self-interaction
 
-    double r6 = 0.0;
-    double r2 = 0.0;
-    // Loop over all pairs of particles
+        double dx = x[i] - x[j];
+        double dy = y[i] - y[j];
+        double dz = z[i] - z[j];
 
-    for (int i = 0; i < N; i++) {
-        for (int j = i + 1; j < N; j++) {
-            // Compute distance components
-            dx = x[i] - x[j];
-            dy = y[i] - y[j];
-            dz = z[i] - z[j];
+        double r2 = dx * dx + dy * dy + dz * dz;
+        double r6 = r2 * r2 * r2;
+        double f = epsilon24[type[i]][type[j]] * sigma6[type[i]][type[j]]
+                 * (2 * sigma6[type[i]][type[j]] - r6) / (r6 * r6 * r2);
 
-            // Compute squared distance
-            r2 = dx * dx + dy * dy + dz * dz;
-            if (r2 > 0) {
-                
-                if (test=='y'){
-                    r= sqrt(r2);
-                
-                    if (r<min_sep){
-                        min_sep=r; //For Unit Testing
-                    }
-                }
+        fx_i += f * dx;
+        fy_i += f * dy;
+        fz_i += f * dz;
+    }
 
-                t1 = type[i];
-                t2 = type[j];
-                
-                sig6 = sigma6[t1][t2];
-                eps24 = epsilon24[t1][t2];
-                r6=r2*r2*r2;
-                f = eps24 * sig6*(2*sig6 -r6) / (r6*r6*r2);
-                 
-                fx[i] += f * dx;
-                fy[i] += f * dy;
-                fz[i] += f * dz;
-                fx[j] -= f * dx;
-                fy[j] -= f * dy;    
-                fz[j] -= f * dz;
-    }}}}
+    // Store computed forces back in global memory
+    fx[i] = fx_i;
+    fy[i] = fy_i;
+    fz[i] = fz_i;
+}
 
+/**
+ * @brief Host function to call the GPU kernel.
+ */
+void compute_forces(double* x, double* y, double* z,
+                    double* fx, double* fy, double* fz,
+                    int* type, int N) {
+    double *d_x, *d_y, *d_z, *d_fx, *d_fy, *d_fz;
+    int* d_type;
+
+    // Allocate GPU memory
+    cudaMalloc((void**)&d_x, N * sizeof(double));
+    cudaMalloc((void**)&d_y, N * sizeof(double));
+    cudaMalloc((void**)&d_z, N * sizeof(double));
+    cudaMalloc((void**)&d_fx, N * sizeof(double));
+    cudaMalloc((void**)&d_fy, N * sizeof(double));
+    cudaMalloc((void**)&d_fz, N * sizeof(double));
+    cudaMalloc((void**)&d_type, N * sizeof(int));
+
+    // Copy data to GPU
+    cudaMemcpy(d_x, x, N * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_y, y, N * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_z, z, N * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_type, type, N * sizeof(int), cudaMemcpyHostToDevice);
+
+    // Launch GPU kernel
+    int num_blocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    compute_forces_gpu<<<num_blocks, BLOCK_SIZE>>>(d_x, d_y, d_z, d_fx, d_fy, d_fz, d_type, N);
+    cudaDeviceSynchronize();  // Wait for GPU to finish
+
+    // Copy results back to CPU
+    cudaMemcpy(fx, d_fx, N * sizeof(double), cudaMemcpyDeviceToHost);
+    cudaMemcpy(fy, d_fy, N * sizeof(double), cudaMemcpyDeviceToHost);
+    cudaMemcpy(fz, d_fz, N * sizeof(double), cudaMemcpyDeviceToHost);
+
+    // Free GPU memory
+    cudaFree(d_x);
+    cudaFree(d_y);
+    cudaFree(d_z);
+    cudaFree(d_fx);
+    cudaFree(d_fy);
+    cudaFree(d_fz);
+    cudaFree(d_type);
+}
 /**
  * @brief Updates particle positions using velocity integration.
  *
@@ -626,7 +648,8 @@ int main(int argc, char** argv) {
     int N1 = static_cast<int>(N * percent_type1 / 100.0); // Number of type 1 particles
     int N0 = N - N1; // Number of type 0 particles
     
-    
+    std::ofstream kinetic_file("kinetic_energy.txt", std::ofstream::trunc);
+
 
     // Create text files in overwrite mode
     
@@ -637,9 +660,14 @@ int main(int argc, char** argv) {
     int steps = T_tot / dt;
 
     double time=0.0;
+    int writestep=static_cast<int>(0.1 / dt); // Cast double division to int
+
     for (int t = 0; t < steps; t++) {
         
-        
+        if (t%writestep==0) {  // Write data every 0.1 time units
+            double K = compute_KE(vx, vy, vz, m0, m1, N0, N1);
+            kinetic_file << time << " " << K << "\n";
+        }
         compute_forces(x, y, z, fx, fy, fz, type, N, min_sep,test);
         update_velocities(vx, vy, vz, fx, fy, fz, m0, m1, N0, N1, dt);
         // Temperature Change - only if temp is set
@@ -675,57 +703,3 @@ int main(int argc, char** argv) {
     
 }
 
-// void compute_forcesopt(double* x, double* y, double* z, double* fx, double* fy, double* fz, int* type, int N, double& min_sep, char test) {
-//     fill(fx, fx + N, 0.0);
-//     fill(fy, fy + N, 0.0);
-//     fill(fz, fz + N, 0.0);
-
-//     const double epsilon24[2][2] = {{72.0, 360.0}, {360.0, 1440.0}};
-//     const double sigma6[2][2] = {{1.0, 64.0}, {64.0, 729.0}};
-
-//     for (int i = 0; i < N - 1; i++) {
-//         int len = N - i - 1;  // Remaining pairs
-//         double dx[len], dy[len], dz[len];
-
-        
-//         cblas_dcopy(len, x + i + 1, 1, dx, 1);
-//         cblas_daxpy(len, -1.0, x + i, 0, dx, 1);
-
-//         cblas_dcopy(len, y + i + 1, 1, dy, 1);
-//         cblas_daxpy(len, -1.0, y + i, 0, dy, 1);
-
-//         cblas_dcopy(len, z + i + 1, 1, dz, 1);
-//         cblas_daxpy(len, -1.0, z + i, 0, dz, 1);
-
-        
-//         double r2[len];
-//         for (int j = 0; j < len; j++) {
-//             r2[j] = dx[j] * dx[j] + dy[j] * dy[j] + dz[j] * dz[j];
-            
-//             if (r2[j] > 0) {
-//                 if (test=='y'){
-//                             double r= sqrt(r2[j]);       
-//                             if (r<min_sep){
-//                             min_sep=r; 
-//                             }
-//                 }
-
-//                 int t1 = type[i], t2 = type[i + j + 1];
-//                 double eps24 = epsilon24[t1][t2];
-//                 double sig6 = sigma6[t1][t2];
-                
-                
-//                 double r6 = r2[j] * r2[j] * r2[j];
-//                 double f = -eps24 * sig6 *((2 * sig6 - r6) / (r6*r6*r2[j]));
-                
-//                 fx[i] += f * dx[j];
-//                 fy[i] += f * dy[j];
-//                 fz[i] += f * dz[j];
-
-//                 fx[i + j + 1] -= f * dx[j];
-//                 fy[i + j + 1] -= f * dy[j];
-//                 fz[i + j + 1] -= f * dz[j];
-//             }
-//         }
-//     }
-// }

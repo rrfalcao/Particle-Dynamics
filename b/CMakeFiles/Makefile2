@@ -138,8 +138,8 @@ CMakeFiles/mdpar.dir/clean:
 # Target rules for target CMakeFiles/default.dir
 
 # All Build rule for target.
-CMakeFiles/default.dir/all: CMakeFiles/md.dir/all
 CMakeFiles/default.dir/all: CMakeFiles/mdpar.dir/all
+CMakeFiles/default.dir/all: CMakeFiles/md.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/default.dir/build.make CMakeFiles/default.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/default.dir/build.make CMakeFiles/default.dir/build
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/rf120/rf120/Particle-Dynamics/Particle-Dynamics/b/CMakeFiles --progress-num= "Built target default"

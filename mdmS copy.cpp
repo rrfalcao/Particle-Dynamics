@@ -9,9 +9,9 @@
  * @author Ridge
  * @date 2025-03-13
  */
-
+#include <chrono>
 #include <iostream>
-#include <omp.h>
+// #include <mpi.h>
 #include <vector>
 #include <algorithm>
 #include <cmath>
@@ -37,8 +37,7 @@ using namespace std;
  * @return True if the new particle is far enough, False otherwise.
  */
 bool far_enough(double x, double y, double z, double* x_arr, double* y_arr, double* z_arr, int init,double R=0.5){ 
-     
-    for (int i = 0; i < init; i++) {
+        for (int i = 0; i < init; i++) {
             double dx = x - x_arr[i];
             double dy = y - y_arr[i];
             double dz = z - z_arr[i];
@@ -72,65 +71,65 @@ bool far_enough(double x, double y, double z, double* x_arr, double* y_arr, doub
  * @param initial_condition Selected initial condition.
  */
 
- void init_particle(double* x, double* y, double* z, double* vx, double* vy, double* vz, int* type, double* m,int N, double Lx, double Ly, double Lz,double m0, double m1, double& percent_type1,std::string initial_condition) {
+void init_particle(double* x, double* y, double* z, double* vx, double* vy, double* vz, int* type,int N, double Lx, double Ly, double Lz,double m0, double m1, double& percent_type1,std::string initial_condition) {
     srand(time(0));
 
     if (initial_condition == "ic-one") {
         // **Test Case 1: One stationary particle**
         x[0] = 10.0; y[0] = 10.0; z[0] = 10.0;
         vx[0] = 0.0; vy[0] = 0.0; vz[0] = 0.0;
-        type[0] = 0; m[0] = m0;
+        type[0] = 0; 
         percent_type1=0.0;
     } 
     else if (initial_condition == "ic-one-vel") {
         // **Test Case 2: One moving particle**
         x[0] = 10.0; y[0] = 10.0; z[0] = 10.0;
         vx[0] = 5.0; vy[0] = 2.0; vz[0] = 1.0;
-        type[0] = 0; m[0] = m0;
+        type[0] = 0; 
         percent_type1=0.0;
     } 
     else if (initial_condition == "ic-two") {
         // **Test Case 3: Two bouncing particles**
         x[0] = 8.5; y[0] = 10.0; z[0] = 10.0;
         vx[0] = 0.0; vy[0] = 0.0; vz[0] = 0.0;
-        type[0] = 0; m[0] = m0;
+        type[0] = 0; 
 
         x[1] = 11.5; y[1] = 10.0; z[1] = 10.0;
         vx[1] = 0.0; vy[1] = 0.0; vz[1] = 0.0;
-        type[1] = 0; m[1] = m0;
+        type[1] = 0; 
         percent_type1=0.0;
     }
     else if (initial_condition == "ic-two-pass1") {
         // **Test Case 4: Two passing particles**
         x[0] = 8.5; y[0] = 11.5; z[0] = 10.0;
         vx[0] = 0.5; vy[0] = 0.0; vz[0] = 0.0;
-        type[0] = 0; m[0] = m0;
+        type[0] = 0; 
 
         x[1] = 11.5; y[1] = 8.5; z[1] = 10.0;
         vx[1] = -0.5; vy[1] = 0.0; vz[1] = 0.0;
-        type[1] = 0; m[1] = m0;
+        type[1] = 0; 
         percent_type1=0.0;
     }
     else if (initial_condition == "ic-two-pass2") {
         // **Test Case 5: Two passing particles close**
         x[0] = 8.5; y[0] = 11.3; z[0] = 10.0;
         vx[0] = 0.5; vy[0] = 0.0; vz[0] = 0.0;
-        type[0] = 0; m[0] = m0;
+        type[0] = 0; 
 
         x[1] = 11.5; y[1] = 8.7; z[1] = 10.0;
         vx[1] = -0.5; vy[1] = 0.0; vz[1] = 0.0;
-        type[1] = 0; m[1] = m0;
+        type[1] = 0; 
         percent_type1=0.0;
     }
     else if (initial_condition == "ic-two-pass3") {
         // **Test Case 6: Two passing heavy particles**
         x[0] = 8.5; y[0] = 11.3; z[0] = 10.0;
         vx[0] = 0.5; vy[0] = 0.0; vz[0] = 0.0;
-        type[0] = 1; m[0] = m1;
+        type[0] = 1; 
 
         x[1] = 11.5; y[1] = 8.7; z[1] = 10.0;
         vx[1] = -0.5; vy[1] = 0.0; vz[1] = 0.0;
-        type[1] = 1; m[1] = m1;
+        type[1] = 1; 
         percent_type1=100.0;
     }
     else if (initial_condition == "ic-random") {
@@ -141,10 +140,10 @@ bool far_enough(double x, double y, double z, double* x_arr, double* y_arr, doub
 
             if (i < N * percent_type1 / 100.0) {
                 type[i] = 1;
-                m[i] = m1;
+                
             } else {
                 type[i] = 0;
-                m[i] = m0;
+                
             }
 
             x[i]=Lx*(double)rand()/RAND_MAX;
@@ -179,77 +178,65 @@ bool far_enough(double x, double y, double z, double* x_arr, double* y_arr, doub
  * @param test Flag for unit testing.
  */
 
- void compute_forces(double* x, double* y, double* z, double* fx, double* fy, double* fz, int* type, int N, double& min_sep, char test) {
-    // Reset forces efficiently using SIMD
-    #pragma omp parallel for simd
-    for (int i = 0; i < N; i++) {
-        fx[i] = 0.0;
-        fy[i] = 0.0;
-        fz[i] = 0.0;
-    }
+void compute_forces(double* x, double* y, double* z, double* fx, double* fy, double* fz, int* type, int N, double& min_sep,char test) {
+
+    // Reset forces
+    fill(fx, fx + N, 0.0);
+    fill(fy, fy + N, 0.0);
+    fill(fz, fz + N, 0.0);
 
     // Lennard-Jones parameters
     const double epsilon24[2][2] = {{72.0, 360.0}, {360.0, 1440.0}};
     const double sigma6[2][2] = {{1.0, 64.0}, {64.0, 729.0}};
 
-    int num_threads = omp_get_max_threads();  // Get available threads
-    int total_pairs = N * (N - 1) / 2;  // Total interactions
-    int chunk_size = total_pairs / num_threads; // Even work division
+    double dx = 0.0;
+    double dy = 0.0;
+    double dz = 0.0;
+    double r = 0.0;
+    double eps24 =0.0;
+    double sig6 = 0.0;
+    int t1 = 0;
+    int t2 = 0;
+    double f = 0.0;
 
-    // ** Use Thread-Private Buffers for Forces **
-    #pragma omp parallel
-    {
-        
-        double* fx_private = new double[N]();  // Local thread buffers
-        double* fy_private = new double[N]();
-        double* fz_private = new double[N]();
+    double r6 = 0.0;
+    double r2 = 0.0;
+    // Loop over all pairs of particles
 
-        // ** Compute Forces with Static Scheduling **
-        #pragma omp for schedule(static, chunk_size)
-        for (int k = 0; k < total_pairs; k++) {
-            int i = floor((2 * N - 1 - sqrt((2 * N - 1) * (2 * N - 1) - 8 * k)) / 2);
-            int j = k - (i * (2 * N - i - 1) / 2) + i + 1;
+    for (int i = 0; i < N; i++) {
+        for (int j = i + 1; j < N; j++) {
+            // Compute distance components
+            dx = x[i] - x[j];
+            dy = y[i] - y[j];
+            dz = z[i] - z[j];
 
-            double dx = x[i] - x[j];
-            double dy = y[i] - y[j];
-            double dz = z[i] - z[j];
-
-            double r2 = dx * dx + dy * dy + dz * dz;
-            if(test=='y'){
-                double r = sqrt(r2);
-                if (r < min_sep) {
-                    min_sep = r;  // For Unit Testing
+            // Compute squared distance
+            r2 = dx * dx + dy * dy + dz * dz;
+            if (r2 > 0) {
+                
+                if (test=='y'){
+                    r= sqrt(r2);
+                
+                    if (r<min_sep){
+                        min_sep=r; //For Unit Testing
+                    }
                 }
-            }
-            double r6 = r2 * r2 * r2;
-            double f = epsilon24[type[i]][type[j]] * sigma6[type[i]][type[j]] * (2 * sigma6[type[i]][type[j]] - r6) / (r6 * r6 * r2);
 
-            
-                fx_private[i] += f * dx;    
-                fy_private[i] += f * dy;
-                fz_private[i] += f * dz;
-                fx_private[j] -= f * dx;
-                fy_private[j] -= f * dy;
-                fz_private[j] -= f * dz;
-            
-        }
-
-        // ** Reduction: Sum Thread-Private Buffers Into Global Force Arrays **
-        #pragma omp critical
-        {
-            for (int i = 0; i < N; i++) {
-                fx[i] += fx_private[i];
-                fy[i] += fy_private[i];
-                fz[i] += fz_private[i];
-            }
-        }
-
-        // Cleanup Thread-Local Memory
-        delete[] fx_private;
-        delete[] fy_private;
-        delete[] fz_private;
-    }
-}
+                t1 = type[i];
+                t2 = type[j];
+                
+                sig6 = sigma6[t1][t2];
+                eps24 = epsilon24[t1][t2];
+                r6=r2*r2*r2;
+                f = eps24 * sig6*(2*sig6 -r6) / (r6*r6*r2);
+                 
+                fx[i] += f * dx;
+                fy[i] += f * dy;
+                fz[i] += f * dz;
+                fx[j] -= f * dx;
+                fy[j] -= f * dy;    
+                fz[j] -= f * dz;
+    }}}}
 
 /**
  * @brief Updates particle positions using velocity integration.
@@ -263,19 +250,11 @@ bool far_enough(double x, double y, double z, double* x_arr, double* y_arr, doub
  * @param N Number of particles.
  * @param dt Time step size.
  */
-void update_positions(double* x, double* y, double* z, double* vx, double* vy, double* vz, int N, double dt,double& max_dim) {
-    
-    #pragma omp parallel for 
-    for(int i=0; i<N; i++){
-        // Check if particles leave the box
-        if(x[i]>max_dim){
-            max_dim=x[i];
-        }
-        x[i] += dt * vx[i];
-        y[i] += dt * vy[i];
-        z[i] += dt * vz[i]; 
-        
-}}
+void update_positions(double* x, double* y, double* z, double* vx, double* vy, double* vz, int N, double dt) {
+    cblas_daxpy(N, dt, vx, 1, x, 1);  // x = dt * vx + x
+    cblas_daxpy(N, dt, vy, 1, y, 1);  // y = dt * vy + y
+    cblas_daxpy(N, dt, vz, 1, z, 1);  // z = dt * vz + z
+}
     
 /**
  * @brief Updates particle velocities using computed forces and mass properties.
@@ -285,18 +264,31 @@ void update_positions(double* x, double* y, double* z, double* vx, double* vy, d
  * @param fx X-force array.
  * @param fy Y-force array.
  * @param fz Z-force array.
- * @param m Mass of particles.
- * @param N Number of particles.
+ * @param m0 Mass of type 0 particles.
+ * @param m1 Mass of type 1 particles.
+ * @param N0 Number of type 0 particles.
+ * @param N1 Number of type 1 particles.
  * @param dt Time step.
  */
-void update_velocities(double* vx, double* vy, double* vz, double* fx, double* fy, double* fz, double* m, int N, double dt) {
-    #pragma omp parallel for simd
-    for (int i = 0; i < N; i++) {
-        vx[i] += dt * fx[i] / m[i];
-        vy[i] += dt * fy[i] / m[i];
-        vz[i] += dt * fz[i] / m[i];
+void update_velocities(double* vx, double* vy, double* vz, double* fx, double* fy, double* fz, double m0,double m1, int N0,int N1, double dt) {
+    
+
+    double factor0 = dt / m0;   // For type 0 particles (mass = 1)
+    double factor1 = dt / m1;  // For type 1 particles (mass = 10)
+
+    // Apply daxpy separately for type 1 and type 0 particles
+    if (N1 > 0) {
+        cblas_daxpy(N1, factor1, fx, 1, vx, 1);
+        cblas_daxpy(N1, factor1, fy, 1, vy, 1);
+        cblas_daxpy(N1, factor1, fz, 1, vz, 1);
     }
-}
+    
+    if (N0 > 0) {
+        cblas_daxpy(N0, factor0, fx + N1, 1, vx + N1, 1);
+        cblas_daxpy(N0, factor0, fy + N1, 1, vy + N1, 1);
+        cblas_daxpy(N0, factor0, fz + N1, 1, vz + N1, 1);
+    }}
+
 /**
  * @brief Applies boundary conditions by reflecting particles off walls.
  * @param x Array of x-coordinates.
@@ -312,7 +304,6 @@ void update_velocities(double* vx, double* vy, double* vz, double* fx, double* f
  */
 
 void apply_boundary_conditions(double* x, double* y, double* z, double* vx, double* vy, double* vz, int N, double Lx, double Ly, double Lz) {
-    #pragma omp parallel for
     for (int i = 0; i < N; i++) {
         if (x[i] < 0) { x[i] = -x[i]; vx[i] = -vx[i]; }
         if (x[i] > Lx) { x[i] = 2 * Lx - x[i]; vx[i] = -vx[i]; }
@@ -327,34 +318,45 @@ void apply_boundary_conditions(double* x, double* y, double* z, double* vx, doub
  * @param vx X-velocity array.
  * @param vy Y-velocity array.
  * @param vz Z-velocity array.
- * @param m Mass of particles.
- * @param N Number of particles.
+ * @param m0 Mass of type 0 particles.
+ * @param m1 Mass of type 1 particles.
+ * @param N0 Number of type 0 particles.
+ * @param N1 Number of type 1 particles.
  * @return Computed temperature.
  */
-double compute_temperature(double* vx, double* vy, double* vz, double* m, int N) {
+double compute_temperature(double* vx, double* vy, double* vz, double m0,double m1,int N0, int N1) {
     double kinetic_energy = 0.0;
     double boltz=0.8314459920816467;
-    #pragma omp parallel for simd reduction(+:kinetic_energy)
-    for (int i = 0; i < N; i++) {
-        kinetic_energy += 0.5 * m[i] * (vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i]);
+    for (int i = 0; i < N0; i++) {  // Type 0 (mass m0)
+        kinetic_energy += 0.5 * m0 * (vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i]);
     }
 
-    return (2.0 / (3.0 *boltz* N)) * kinetic_energy;  
+    for (int i = N0; i < (N0 + N1); i++) {  // Type 1 (mass m1)
+        kinetic_energy += 0.5 * m1 * (vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i]);
+    }
+
+    return (2.0 / (3.0 * boltz * (N0 + N1))) * kinetic_energy;  
 }
 /**
  * @brief Computes the system temperature based on kinetic energy.
  * @param vx X-velocity array.
  * @param vy Y-velocity array.
  * @param vz Z-velocity array.
- * @param m Mass of particles.
- * @param N Number of particles.
+ * @param m0 Mass of type 0 particles.
+ * @param m1 Mass of type 1 particles.
+ * @param N0 Number of type 0 particles.
+ * @param N1 Number of type 1 particles.
  * @return Computed temperature.
  */
-double compute_KE(double* vx, double* vy, double* vz, double* m, int N) {
+double compute_KE(double* vx, double* vy, double* vz, double m0,double m1, int N0, int N1) {
     double kinetic_energy = 0.0;
-    #pragma omp parallel for simd reduction(+:kinetic_energy)
-    for (int i = 0; i < N; i++) {
-        kinetic_energy += 0.5 * m[i] * (vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i]);
+    
+    for (int i = 0; i < N0; i++) {  // Type 0 (mass m0)
+        kinetic_energy += 0.5 * m0 * (vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i]);
+    }
+
+    for (int i = N0; i < (N0 + N1); i++) {  // Type 1 (mass m1)
+        kinetic_energy += 0.5 * m1 * (vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i]);
     }
 
     return kinetic_energy;  
@@ -365,18 +367,20 @@ double compute_KE(double* vx, double* vy, double* vz, double* m, int N) {
  * @param vx X-velocity array.
  * @param vy Y-velocity array.
  * @param vz Z-velocity array.
- * @param m Mass of particles.
- * @param N Number of particles.
+ * @param m0 Mass of type 0 particles.
+ * @param m1 Mass of type 1 particles.
+ * @param N0 Number of type 0 particles.
+ * @param N1 Number of type 1 particles.
  * @param T_target Target temperature.
  */
-void scale_velocities(double* vx, double* vy, double* vz, double* m, int N, double T_target) {
-    double T_current = compute_temperature(vx, vy, vz, m, N);
+void scale_velocities(double* vx, double* vy, double* vz, double m0,double m1,int N0, int N1, double T_target) {
+    double T_current = compute_temperature(vx, vy, vz, m0,m1,N0, N1);
 
     if (T_current == 0.0) return;  // Avoid division by zero
 
         double scale_factor = sqrt(T_target / T_current);
-    #pragma omp parallel for simd
-    for (int i = 0; i < N; i++) {
+
+    for (int i = 0; i < (N0+N1); i++) {
         vx[i] *= scale_factor;
         vy[i] *= scale_factor;
         vz[i] *= scale_factor;
@@ -402,7 +406,7 @@ void scale_velocities(double* vx, double* vy, double* vz, double* m, int N, doub
  * @param Ly Length of the simulation box in y direction.
  * @param end Boolean flag indicating if this is the final test run.
  */
-void unit_tests(std::string test_flag, double min_separation, double* x, double* y, double* vx, double* vy, int N, double Lx, double Ly,bool end) {
+void unit_tests(std::string test_flag, double time, double min_separation, double* x, double* y, double* vx, double* vy, int N, double Lx, double Ly,bool end) {
 
     
     static bool first_collision1_detected = false;
@@ -427,7 +431,7 @@ void unit_tests(std::string test_flag, double min_separation, double* x, double*
             if (x[0] <= 0.0 || x[0] >= Lx || y[0] <= 0.0 || y[0] >= Ly) {
                
                 first_collision1_detected = true;
-                cout << "PASS: First wall collision at ("  << x[0] << ", " << y[0]  << ") "<<endl;
+                cout << "PASS: First wall collision at ("  << x[0] << ", " << y[0]  << ") at t = " << time << "\n";
             }
         }
     } 
@@ -533,11 +537,7 @@ void unit_tests(std::string test_flag, double min_separation, double* x, double*
  */
 
 int main(int argc, char** argv) {
-
-    double start_time, end_time;
-    
-    start_time = omp_get_wtime();  // Start timer
-
+    auto start_time = std::chrono::high_resolution_clock::now();
     double Lx = 20.0, Ly = 20.0, Lz = 20.0;
     double dt = 0.001, T_tot = 50.0;
     int N = 8;
@@ -613,9 +613,7 @@ int main(int argc, char** argv) {
     double* fx = new double[N]; 
     double* fy = new double[N]; 
     double* fz = new double[N];
-    double* m = new double[N]; 
     int* type = new int[N];
-    double max_dim=0.0;
     double m0 = 1.0;
     double m1 = 10.0;
     char test = 'y';
@@ -624,30 +622,41 @@ int main(int argc, char** argv) {
     if (test == 'y') {
         cout<<initial_condition<<endl;    }
 
-    init_particle(x, y, z, vx, vy, vz, type, m, N, Lx, Ly, Lz, m0, m1,percent_type1, initial_condition);
-    std::ofstream kinetic_file("kinetic_energy.txt", std::ofstream::trunc);
+    init_particle(x, y, z, vx, vy, vz, type, N, Lx, Ly, Lz, m0, m1, percent_type1,initial_condition);
+    int N1 = static_cast<int>(N * percent_type1 / 100.0); // Number of type 1 particles
+    int N0 = N - N1; // Number of type 0 particles
     
+    std::ofstream kinetic_file("kinetic_energy.txt", std::ofstream::trunc);
+
+
+    // Create text files in overwrite mode
+    
+    if (temperature > 0.0) {
+        scale_velocities(vx, vy, vz, m0, m1, N0, N1, temperature);
+    }
     /////////////////////// Numerical Loop /////////////////////////
     int steps = T_tot / dt;
+
     double time=0.0;
     int writestep=static_cast<int>(0.1 / dt); // Cast double division to int
+
     for (int t = 0; t < steps; t++) {
         
         if (t%writestep==0) {  // Write data every 0.1 time units
-            double K = compute_KE(vx, vy, vz, m, N);
+            double K = compute_KE(vx, vy, vz, m0, m1, N0, N1);
             kinetic_file << time << " " << K << "\n";
         }
         compute_forces(x, y, z, fx, fy, fz, type, N, min_sep,test);
-        update_velocities(vx, vy, vz, fx, fy, fz, m, N, dt);
+        update_velocities(vx, vy, vz, fx, fy, fz, m0, m1, N0, N1, dt);
         // Temperature Change - only if temp is set
         if (temperature > 0.0) {
-            scale_velocities(vx, vy, vz, m, N, temperature);
+            scale_velocities(vx, vy, vz, m0, m1, N0, N1, temperature);
         }
-        update_positions(x, y, z, vx, vy, vz, N, dt,max_dim);
+        update_positions(x, y, z, vx, vy, vz, N, dt);
         
         
         if (test=='y') {
-            unit_tests(initial_condition, min_sep, x, y, vx, vy, N, Lx, Ly,end);
+            unit_tests(initial_condition, time, min_sep, x, y, vx, vy, N, Lx, Ly,end);
         }
 
         apply_boundary_conditions(x, y, z, vx, vy, vz, N, Lx, Ly, Lz);
@@ -657,20 +666,17 @@ int main(int argc, char** argv) {
 
     end=true;
     if (test=='y') {
-        unit_tests(initial_condition, min_sep, x, y, vx, vy, N, Lx, Ly,end);
+        unit_tests(initial_condition, time, min_sep, x, y, vx, vy, N, Lx, Ly,end);
     }
-    bool out = max_dim>Lx;
-    cout<<"Particles have left the box: "<<out<<" Max x dimension: "<<max_dim<<endl;
+
     /////// Cleanup Section ///////////
     delete[] x; delete[] y; delete[] z;
     delete[] vx; delete[] vy; delete[] vz;
     delete[] fx; delete[] fy; delete[] fz;
-    delete[] type; delete[] m;
-    kinetic_file.close();
-    end_time = omp_get_wtime();  // End timer
-    
-    double elapsed_time = end_time - start_time;
-    cout << "Execution time: " << elapsed_time << " seconds\n";
+    delete[] type;
+    auto end_time = std::chrono::high_resolution_clock::now();
+    double time_new = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+    cout<<"Time taken: "<<time_new/1000<<" s"<<endl;
     ///////////////////////////////////
     
 }
