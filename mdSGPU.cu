@@ -20,9 +20,10 @@
 #include <limits>
 #include <fstream> 
 #include <boost/program_options.hpp>
+#include <cuda_runtime.h>
 namespace po = boost::program_options;
 using namespace std;
-
+#define BLOCK_SIZE 128
 /**
  * @brief Checks if a new particle is far enough from existing particles before placing it.
  * 
@@ -71,65 +72,65 @@ bool far_enough(double x, double y, double z, double* x_arr, double* y_arr, doub
  * @param initial_condition Selected initial condition.
  */
 
-void init_particle(double* x, double* y, double* z, double* vx, double* vy, double* vz, int* type,int N, double Lx, double Ly, double Lz,double m0, double m1, double& percent_type1,std::string initial_condition) {
+ void init_particle(double* x, double* y, double* z, double* vx, double* vy, double* vz, int* type, double* m,int N, double Lx, double Ly, double Lz,double m0, double m1, double& percent_type1,std::string initial_condition) {
     srand(time(0));
 
     if (initial_condition == "ic-one") {
         // **Test Case 1: One stationary particle**
         x[0] = 10.0; y[0] = 10.0; z[0] = 10.0;
         vx[0] = 0.0; vy[0] = 0.0; vz[0] = 0.0;
-        type[0] = 0; 
+        type[0] = 0; m[0] = m0;
         percent_type1=0.0;
     } 
     else if (initial_condition == "ic-one-vel") {
         // **Test Case 2: One moving particle**
         x[0] = 10.0; y[0] = 10.0; z[0] = 10.0;
         vx[0] = 5.0; vy[0] = 2.0; vz[0] = 1.0;
-        type[0] = 0; 
+        type[0] = 0; m[0] = m0;
         percent_type1=0.0;
     } 
     else if (initial_condition == "ic-two") {
         // **Test Case 3: Two bouncing particles**
         x[0] = 8.5; y[0] = 10.0; z[0] = 10.0;
         vx[0] = 0.0; vy[0] = 0.0; vz[0] = 0.0;
-        type[0] = 0; 
+        type[0] = 0; m[0] = m0;
 
         x[1] = 11.5; y[1] = 10.0; z[1] = 10.0;
         vx[1] = 0.0; vy[1] = 0.0; vz[1] = 0.0;
-        type[1] = 0; 
+        type[1] = 0; m[1] = m0;
         percent_type1=0.0;
     }
     else if (initial_condition == "ic-two-pass1") {
         // **Test Case 4: Two passing particles**
         x[0] = 8.5; y[0] = 11.5; z[0] = 10.0;
         vx[0] = 0.5; vy[0] = 0.0; vz[0] = 0.0;
-        type[0] = 0; 
+        type[0] = 0; m[0] = m0;
 
         x[1] = 11.5; y[1] = 8.5; z[1] = 10.0;
         vx[1] = -0.5; vy[1] = 0.0; vz[1] = 0.0;
-        type[1] = 0; 
+        type[1] = 0; m[1] = m0;
         percent_type1=0.0;
     }
     else if (initial_condition == "ic-two-pass2") {
         // **Test Case 5: Two passing particles close**
         x[0] = 8.5; y[0] = 11.3; z[0] = 10.0;
         vx[0] = 0.5; vy[0] = 0.0; vz[0] = 0.0;
-        type[0] = 0; 
+        type[0] = 0; m[0] = m0;
 
         x[1] = 11.5; y[1] = 8.7; z[1] = 10.0;
         vx[1] = -0.5; vy[1] = 0.0; vz[1] = 0.0;
-        type[1] = 0; 
+        type[1] = 0; m[1] = m0;
         percent_type1=0.0;
     }
     else if (initial_condition == "ic-two-pass3") {
         // **Test Case 6: Two passing heavy particles**
         x[0] = 8.5; y[0] = 11.3; z[0] = 10.0;
         vx[0] = 0.5; vy[0] = 0.0; vz[0] = 0.0;
-        type[0] = 1; 
+        type[0] = 1; m[0] = m1;
 
         x[1] = 11.5; y[1] = 8.7; z[1] = 10.0;
         vx[1] = -0.5; vy[1] = 0.0; vz[1] = 0.0;
-        type[1] = 1; 
+        type[1] = 1; m[1] = m1;
         percent_type1=100.0;
     }
     else if (initial_condition == "ic-random") {
@@ -140,10 +141,10 @@ void init_particle(double* x, double* y, double* z, double* vx, double* vy, doub
 
             if (i < N * percent_type1 / 100.0) {
                 type[i] = 1;
-                
+                m[i] = m1;
             } else {
                 type[i] = 0;
-                
+                m[i] = m0;
             }
 
             x[i]=Lx*(double)rand()/RAND_MAX;
@@ -178,66 +179,69 @@ void init_particle(double* x, double* y, double* z, double* vx, double* vy, doub
  * @param test Flag for unit testing.
  */
 
-void compute_forces(double* x, double* y, double* z, double* fx, double* fy, double* fz, int* type, int N, double& min_sep,char test) {
+// Lennard-Jones constants
+__constant__ double epsilon24[2][2] = {{72.0, 360.0}, {360.0, 1440.0}};
+__constant__ double sigma6[2][2] = {{1.0, 64.0}, {64.0, 729.0}};
 
-    // Reset forces
-    fill(fx, fx + N, 0.0);
-    fill(fy, fy + N, 0.0);
-    fill(fz, fz + N, 0.0);
+/**
+ * @brief CUDA Kernel to compute Lennard-Jones forces in parallel.
+ */
+__global__ void compute_forces_gpu(double* x, double* y, double* z,
+    double* fx, double* fy, double* fz,
+    int* type, int N) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= N) return;
 
-    // Lennard-Jones parameters
-    const double epsilon24[2][2] = {{72.0, 360.0}, {360.0, 1440.0}};
-    const double sigma6[2][2] = {{1.0, 64.0}, {64.0, 729.0}};
+    double fx_i = 0.0, fy_i = 0.0, fz_i = 0.0;
 
-    double dx = 0.0;
-    double dy = 0.0;
-    double dz = 0.0;
-    double r = 0.0;
-    double eps24 =0.0;
-    double sig6 = 0.0;
-    int t1 = 0;
-    int t2 = 0;
-    double f = 0.0;
+    for (int j = i + 1; j < N; j++) {  // Avoid redundant calculations
+        if (j >= N) continue; 
+        double dx = x[i] - x[j];
+        double dy = y[i] - y[j];
+        double dz = z[i] - z[j];
 
-    double r6 = 0.0;
-    double r2 = 0.0;
-    // Loop over all pairs of particles
+        double r2 = dx * dx + dy * dy + dz * dz;
+        if (r2 == 0) continue;  // Avoid division by zero
 
-    for (int i = 0; i < N; i++) {
-        for (int j = i + 1; j < N; j++) {
-            // Compute distance components
-            dx = x[i] - x[j];
-            dy = y[i] - y[j];
-            dz = z[i] - z[j];
+        double r6 = r2 * r2 * r2;
+        double sig6 = sigma6[type[i]][type[j]];
+        double eps24 = epsilon24[type[i]][type[j]];
 
-            // Compute squared distance
-            r2 = dx * dx + dy * dy + dz * dz;
-            if (r2 > 0) {
-                
-                if (test=='y'){
-                    r= sqrt(r2);
-                
-                    if (r<min_sep){
-                        min_sep=r; //For Unit Testing
-                    }
-                }
+        double f = eps24 * sig6 * (2 * sig6 - r6) / (r6 * r6 * r2);
 
-                t1 = type[i];
-                t2 = type[j];
-                
-                sig6 = sigma6[t1][t2];
-                eps24 = epsilon24[t1][t2];
-                r6=r2*r2*r2;
-                f = eps24 * sig6*(2*sig6 -r6) / (r6*r6*r2);
-                 
-                fx[i] += f * dx;
-                fy[i] += f * dy;
-                fz[i] += f * dz;
-                fx[j] -= f * dx;
-                fy[j] -= f * dy;    
-                fz[j] -= f * dz;
-    }}}}
+        fx_i += f * dx;
+        fy_i += f * dy;
+        fz_i += f * dz;
+        
+        fx[j] -= f * dx;
+        fy[j] -= f * dy;
+        fz[j] -= f * dz;
+        
+    }
 
+    // Store computed forces back in global memory
+    fx[i] += fx_i;
+    fy[i] += fy_i;
+    fz[i] += fz_i;
+    
+}
+
+/**
+ * @brief Host function to call the GPU kernel.
+ */
+void compute_forces(double* x, double* y, double* z,
+    double* fx, double* fy, double* fz,
+    int* type, int N) {
+    int num_blocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
+
+    // Reset force arrays
+    cudaMemset(fx, 0, N * sizeof(double));
+    cudaMemset(fy, 0, N * sizeof(double));
+    cudaMemset(fz, 0, N * sizeof(double));
+
+    compute_forces_gpu<<<num_blocks, BLOCK_SIZE>>>(x, y, z, fx, fy, fz, type, N);
+    // cudaDeviceSynchronize();
+}
 /**
  * @brief Updates particle positions using velocity integration.
  *
@@ -250,10 +254,22 @@ void compute_forces(double* x, double* y, double* z, double* fx, double* fy, dou
  * @param N Number of particles.
  * @param dt Time step size.
  */
-void update_positions(double* x, double* y, double* z, double* vx, double* vy, double* vz, int N, double dt) {
-    cblas_daxpy(N, dt, vx, 1, x, 1);  // x = dt * vx + x
-    cblas_daxpy(N, dt, vy, 1, y, 1);  // y = dt * vy + y
-    cblas_daxpy(N, dt, vz, 1, z, 1);  // z = dt * vz + z
+__global__ void update_positions_gpu(double* x, double* y, double* z,
+        double* vx, double* vy, double* vz,
+        int N, double dt) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= N) return;
+
+    x[i] += dt * vx[i];
+    y[i] += dt * vy[i];
+    z[i] += dt * vz[i];
+}
+void update_positions(double* x, double* y, double* z,
+    double* vx, double* vy, double* vz,
+    int N, double dt) {
+    int num_blocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    update_positions_gpu<<<num_blocks, BLOCK_SIZE>>>(x, y, z, vx, vy, vz, N, dt);
+    // cudaDeviceSynchronize(); // Optional if no immediate CPU access
 }
     
 /**
@@ -270,24 +286,23 @@ void update_positions(double* x, double* y, double* z, double* vx, double* vy, d
  * @param N1 Number of type 1 particles.
  * @param dt Time step.
  */
-void update_velocities(double* vx, double* vy, double* vz, double* fx, double* fy, double* fz, double m0,double m1, int N0,int N1, double dt) {
-    
+__global__ void update_velocities_gpu(double* vx, double* vy, double* vz,
+    double* fx, double* fy, double* fz,
+    double* m, int N, double dt) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= N) return;
 
-    double factor0 = dt / m0;   // For type 0 particles (mass = 1)
-    double factor1 = dt / m1;  // For type 1 particles (mass = 10)
-
-    // Apply daxpy separately for type 1 and type 0 particles
-    if (N1 > 0) {
-        cblas_daxpy(N1, factor1, fx, 1, vx, 1);
-        cblas_daxpy(N1, factor1, fy, 1, vy, 1);
-        cblas_daxpy(N1, factor1, fz, 1, vz, 1);
-    }
-    
-    if (N0 > 0) {
-        cblas_daxpy(N0, factor0, fx + N1, 1, vx + N1, 1);
-        cblas_daxpy(N0, factor0, fy + N1, 1, vy + N1, 1);
-        cblas_daxpy(N0, factor0, fz + N1, 1, vz + N1, 1);
-    }}
+    vx[i] += dt * fx[i] / m[i];
+    vy[i] += dt * fy[i] / m[i];
+    vz[i] += dt * fz[i] / m[i];
+}
+void update_velocities(double* vx, double* vy, double* vz,
+    double* fx, double* fy, double* fz,
+    double* m, int N, double dt) {
+    int num_blocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    update_velocities_gpu<<<num_blocks, BLOCK_SIZE>>>(vx, vy, vz, fx, fy, fz, m, N, dt);
+    // cudaDeviceSynchronize(); // Optional
+}
 
 /**
  * @brief Applies boundary conditions by reflecting particles off walls.
@@ -302,16 +317,27 @@ void update_velocities(double* vx, double* vy, double* vz, double* fx, double* f
  * @param Ly Box length in y-direction.
  * @param Lz Box length in z-direction.
  */
+__global__ void apply_boundary_conditions_gpu(double* x, double* y, double* z,
+    double* vx, double* vy, double* vz,
+    int N, double Lx, double Ly, double Lz) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= N) return;
 
-void apply_boundary_conditions(double* x, double* y, double* z, double* vx, double* vy, double* vz, int N, double Lx, double Ly, double Lz) {
-    for (int i = 0; i < N; i++) {
-        if (x[i] < 0) { x[i] = -x[i]; vx[i] = -vx[i]; }
-        if (x[i] > Lx) { x[i] = 2 * Lx - x[i]; vx[i] = -vx[i]; }
-        if (y[i] < 0) { y[i] = -y[i]; vy[i] = -vy[i]; }
-        if (y[i] > Ly) { y[i] = 2 * Ly - y[i]; vy[i] = -vy[i]; }
-        if (z[i] < 0) { z[i] = -z[i]; vz[i] = -vz[i]; }
-        if (z[i] > Lz) { z[i] = 2 * Lz - z[i]; vz[i] = -vz[i]; }
-    }
+    if (x[i] < 0) { x[i] = -x[i]; vx[i] = -vx[i]; }
+    if (x[i] > Lx) { x[i] = 2 * Lx - x[i]; vx[i] = -vx[i]; }
+
+    if (y[i] < 0) { y[i] = -y[i]; vy[i] = -vy[i]; }
+    if (y[i] > Ly) { y[i] = 2 * Ly - y[i]; vy[i] = -vy[i]; }
+
+    if (z[i] < 0) { z[i] = -z[i]; vz[i] = -vz[i]; }
+    if (z[i] > Lz) { z[i] = 2 * Lz - z[i]; vz[i] = -vz[i]; }
+}
+void apply_boundary_conditions(double* x, double* y, double* z,
+    double* vx, double* vy, double* vz,
+    int N, double Lx, double Ly, double Lz) {
+    int num_blocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    apply_boundary_conditions_gpu<<<num_blocks, BLOCK_SIZE>>>(x, y, z, vx, vy, vz, N, Lx, Ly, Lz);
+    cudaDeviceSynchronize();
 }
 /**
  * @brief Computes the system temperature based on kinetic energy.
@@ -324,18 +350,50 @@ void apply_boundary_conditions(double* x, double* y, double* z, double* vx, doub
  * @param N1 Number of type 1 particles.
  * @return Computed temperature.
  */
-double compute_temperature(double* vx, double* vy, double* vz, double m0,double m1,int N0, int N1) {
-    double kinetic_energy = 0.0;
-    double boltz=0.8314459920816467;
-    for (int i = 0; i < N0; i++) {  // Type 0 (mass m0)
-        kinetic_energy += 0.5 * m0 * (vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i]);
+__global__ void compute_temperature_gpu(const double* vx, const double* vy, const double* vz,
+    const double* m, double* partial_sum, int N) {
+    __shared__ double temp_sum[BLOCK_SIZE];
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int tid = threadIdx.x;
+
+    double ke = 0.0;
+    if (i < N) {
+        double v2 = vx[i]*vx[i] + vy[i]*vy[i] + vz[i]*vz[i];
+        ke = 0.5 * m[i] * v2;
+    }
+    temp_sum[tid] = ke;
+
+    __syncthreads();
+
+    // Reduce within the block
+    for (int s = BLOCK_SIZE / 2; s > 0; s >>= 1) {
+        if (tid < s)
+        temp_sum[tid] += temp_sum[tid + s];
+        __syncthreads();
+}
+
+// Write result from each block to global memory
+    if (tid == 0)
+        partial_sum[blockIdx.x] = temp_sum[0];
+}
+double compute_temperature(double* vx, double* vy, double* vz, double* m, int N) {
+    const double boltz = 0.8314459920816467;
+    int num_blocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
+
+    double* d_partial_sum;
+    cudaMallocManaged(&d_partial_sum, num_blocks * sizeof(double));
+
+    compute_temperature_gpu<<<num_blocks, BLOCK_SIZE>>>(vx, vy, vz, m, d_partial_sum, N);
+    cudaDeviceSynchronize();
+
+    // Final sum on CPU (since num_blocks is small)
+    double total_ke = 0.0;
+    for (int i = 0; i < num_blocks; ++i) {
+        total_ke += d_partial_sum[i];
     }
 
-    for (int i = N0; i < (N0 + N1); i++) {  // Type 1 (mass m1)
-        kinetic_energy += 0.5 * m1 * (vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i]);
-    }
-
-    return (2.0 / (3.0 * boltz * (N0 + N1))) * kinetic_energy;  
+    cudaFree(d_partial_sum);
+    return (2.0 / (3.0 * boltz * N)) * total_ke;
 }
 /**
  * @brief Computes the system temperature based on kinetic energy.
@@ -348,18 +406,22 @@ double compute_temperature(double* vx, double* vy, double* vz, double m0,double 
  * @param N1 Number of type 1 particles.
  * @return Computed temperature.
  */
-double compute_KE(double* vx, double* vy, double* vz, double m0,double m1, int N0, int N1) {
-    double kinetic_energy = 0.0;
-    
-    for (int i = 0; i < N0; i++) {  // Type 0 (mass m0)
-        kinetic_energy += 0.5 * m0 * (vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i]);
+double compute_KE(double* vx, double* vy, double* vz, double* m, int N) {
+    int num_blocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
+
+    double* d_partial_sum;
+    cudaMallocManaged(&d_partial_sum, num_blocks * sizeof(double));
+
+    compute_temperature_gpu<<<num_blocks, BLOCK_SIZE>>>(vx, vy, vz, m, d_partial_sum, N);
+    cudaDeviceSynchronize();
+
+    double total_ke = 0.0;
+    for (int i = 0; i < num_blocks; ++i) {
+        total_ke += d_partial_sum[i];
     }
 
-    for (int i = N0; i < (N0 + N1); i++) {  // Type 1 (mass m1)
-        kinetic_energy += 0.5 * m1 * (vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i]);
-    }
-
-    return kinetic_energy;  
+    cudaFree(d_partial_sum);
+    return total_ke;
 }
 
 /**
@@ -373,18 +435,26 @@ double compute_KE(double* vx, double* vy, double* vz, double m0,double m1, int N
  * @param N1 Number of type 1 particles.
  * @param T_target Target temperature.
  */
-void scale_velocities(double* vx, double* vy, double* vz, double m0,double m1,int N0, int N1, double T_target) {
-    double T_current = compute_temperature(vx, vy, vz, m0,m1,N0, N1);
 
-    if (T_current == 0.0) return;  // Avoid division by zero
-
-        double scale_factor = sqrt(T_target / T_current);
-
-    for (int i = 0; i < (N0+N1); i++) {
+ __global__ void scale_velocities_gpu(double* vx, double* vy, double* vz, int N, double scale_factor) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < N) {
         vx[i] *= scale_factor;
         vy[i] *= scale_factor;
         vz[i] *= scale_factor;
     }
+}
+
+void scale_velocities(double* vx, double* vy, double* vz, double* m, int N, double T_target) {
+    double T_current = compute_temperature(vx, vy, vz, m, N);  // Already on GPU
+
+    if (T_current == 0.0) return;  // Avoid division by zero
+
+    double scale_factor = sqrt(T_target / T_current);
+
+    int num_blocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    scale_velocities_gpu<<<num_blocks, BLOCK_SIZE>>>(vx, vy, vz, N, scale_factor);
+    // cudaDeviceSynchronize();
 }
 
 /**
@@ -604,16 +674,19 @@ int main(int argc, char** argv) {
 
     // **Allocate Memory for Particles**
     
-    double* x = new double[N]; 
-    double* y = new double[N]; 
-    double* z = new double[N];
-    double* vx = new double[N]; 
-    double* vy = new double[N]; 
-    double* vz = new double[N];
-    double* fx = new double[N]; 
-    double* fy = new double[N]; 
-    double* fz = new double[N];
-    int* type = new int[N];
+    double *x, *y, *z, *vx, *vy, *vz, *fx, *fy, *fz, *m;
+    int *type;
+    cudaMallocManaged(&x, N * sizeof(double));
+    cudaMallocManaged(&y, N * sizeof(double));
+    cudaMallocManaged(&z, N * sizeof(double));
+    cudaMallocManaged(&vx, N * sizeof(double));
+    cudaMallocManaged(&vy, N * sizeof(double));
+    cudaMallocManaged(&vz, N * sizeof(double));
+    cudaMallocManaged(&fx, N * sizeof(double));
+    cudaMallocManaged(&fy, N * sizeof(double));
+    cudaMallocManaged(&fz, N * sizeof(double));
+    cudaMallocManaged(&m, N * sizeof(double));
+    cudaMallocManaged(&type, N * sizeof(int));
     double m0 = 1.0;
     double m1 = 10.0;
     char test = 'y';
@@ -622,18 +695,44 @@ int main(int argc, char** argv) {
     if (test == 'y') {
         cout<<initial_condition<<endl;    }
 
-    init_particle(x, y, z, vx, vy, vz, type, N, Lx, Ly, Lz, m0, m1, percent_type1,initial_condition);
-    int N1 = static_cast<int>(N * percent_type1 / 100.0); // Number of type 1 particles
-    int N0 = N - N1; // Number of type 0 particles
     
-    std::ofstream kinetic_file("kinetic_energy.txt", std::ofstream::trunc);
-    std::ofstream particle_file("particles.txt", std::ofstream::trunc);
+        // ========== CUDA allocation error checking ==========
+    auto check_cuda = [](cudaError_t err, const char* name) {
+        if (err != cudaSuccess) {
+            std::cerr << "cudaMallocManaged failed for " << name << ": "
+                    << cudaGetErrorString(err) << std::endl;
+            exit(EXIT_FAILURE);
+        }
+    };
 
+    check_cuda(cudaMallocManaged(&x, N * sizeof(double)), "x");
+    check_cuda(cudaMallocManaged(&y, N * sizeof(double)), "y");
+    check_cuda(cudaMallocManaged(&z, N * sizeof(double)), "z");
+    check_cuda(cudaMallocManaged(&vx, N * sizeof(double)), "vx");
+    check_cuda(cudaMallocManaged(&vy, N * sizeof(double)), "vy");
+    check_cuda(cudaMallocManaged(&vz, N * sizeof(double)), "vz");
+    check_cuda(cudaMallocManaged(&fx, N * sizeof(double)), "fx");
+    check_cuda(cudaMallocManaged(&fy, N * sizeof(double)), "fy");
+    check_cuda(cudaMallocManaged(&fz, N * sizeof(double)), "fz");
+    check_cuda(cudaMallocManaged(&m, N * sizeof(double)), "m");
+    check_cuda(cudaMallocManaged(&type, N * sizeof(int)), "type");
+    init_particle(x, y, z, vx, vy, vz, type, m, N, Lx, Ly, Lz, m0, m1, percent_type1,initial_condition);    
+    std::ofstream kinetic_file("kinetic_energy.txt", std::ofstream::trunc);
+
+    // ========== Basic safety checks before simulation ==========
+    for (int i = 0; i < N; ++i) {
+        if (!std::isfinite(x[i]) || !std::isfinite(vx[i]) || !std::isfinite(m[i])) {
+            std::cerr << "Particle " << i << " has invalid data: "
+                    << "x=" << x[i] << ", vx=" << vx[i] << ", m=" << m[i] << std::endl;
+            exit(EXIT_FAILURE);
+        }
+    }
+    std::cout << "Initial data validated. Starting simulation..." << std::endl;
 
     // Create text files in overwrite mode
     
     if (temperature > 0.0) {
-        scale_velocities(vx, vy, vz, m0, m1, N0, N1, temperature);
+        scale_velocities(vx, vy, vz, m, N, temperature);
     }
     /////////////////////// Numerical Loop /////////////////////////
     int steps = T_tot / dt;
@@ -644,21 +743,14 @@ int main(int argc, char** argv) {
     for (int t = 0; t < steps; t++) {
         
         if (t%writestep==0) {  // Write data every 0.1 time units
-            double K = compute_KE(vx, vy, vz, m0, m1, N0, N1);
+            double K = compute_KE(vx, vy, vz, m, N);
             kinetic_file << time << " " << K << "\n";
-            if(test=='y'){
-                for (int i = 0; i < N; i++) {
-                    particle_file << time << " " << i << " " << type[i] << " "
-                                  << x[i] << " " << y[i] << " " << z[i] << " "
-                                  << vx[i] << " " << vy[i] << " " << vz[i] << "\n";
-                }
-            }
         }
-        compute_forces(x, y, z, fx, fy, fz, type, N, min_sep,test);
-        update_velocities(vx, vy, vz, fx, fy, fz, m0, m1, N0, N1, dt);
+        compute_forces(x, y, z, fx, fy, fz, type, N);
+        update_velocities(vx, vy, vz, fx, fy, fz, m, N, dt);
         // Temperature Change - only if temp is set
         if (temperature > 0.0) {
-            scale_velocities(vx, vy, vz, m0, m1, N0, N1, temperature);
+            scale_velocities(vx, vy, vz, m, N, temperature);
         }
         update_positions(x, y, z, vx, vy, vz, N, dt);
         
@@ -678,10 +770,10 @@ int main(int argc, char** argv) {
     }
 
     /////// Cleanup Section ///////////
-    delete[] x; delete[] y; delete[] z;
-    delete[] vx; delete[] vy; delete[] vz;
-    delete[] fx; delete[] fy; delete[] fz;
-    delete[] type;
+    cudaFree(x); cudaFree(y); cudaFree(z);
+    cudaFree(vx); cudaFree(vy); cudaFree(vz);
+    cudaFree(fx); cudaFree(fy); cudaFree(fz);
+    cudaFree(m); cudaFree(type);
     auto end_time = std::chrono::high_resolution_clock::now();
     double time_new = std::chrono::duration<double, std::milli>(end_time - start_time).count();
     cout<<"Time taken: "<<time_new/1000<<" s"<<endl;

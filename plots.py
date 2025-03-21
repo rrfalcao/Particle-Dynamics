@@ -8,7 +8,7 @@ from mpl_toolkits.mplot3d import Axes3D
 matplotlib.use("TkAgg")  # Ensure plots open in a separate window
 limit =20
 # Load kinetic energy data and plot
-def plot_kinetic_energy(filename="kinetic_energy.txt"):
+def plot_kinetic_energy(filename="kinetic_energy.txt", save_path="kinetic_energy.png"):
     data = np.loadtxt(filename)
     time = data[:, 0]
     kinetic_energy = data[:, 1]
@@ -19,7 +19,11 @@ def plot_kinetic_energy(filename="kinetic_energy.txt"):
     plt.ylabel("Kinetic Energy")
     plt.title("Kinetic Energy vs. Time")
     plt.grid(True)
-    plt.show(block=True)  # Ensure plot opens in a new window
+    plt.tight_layout()
+    
+    # Save and show
+    plt.savefig(save_path)
+    plt.show(block=True)
 
 # Load particle data and create animation
 def animate_xy_plane(filename="particles.txt"):
@@ -107,10 +111,45 @@ def animate_3d_trajectory(filename="particles.txt"):
     ani = animation.FuncAnimation(fig, update, frames=len(unique_times), interval=100, blit=False)
 
     plt.show(block=True)  # Ensure animation opens in a new window
+# Static 2D XY trajectory plot
+def plot_xy_trajectories(filename="particles.txt", save_path="xy_trajectories.png"):
+    data = np.loadtxt(filename)
+    unique_ids = np.unique(data[:, 1])  # Particle IDs (assumed column 1)
 
+    plt.figure(figsize=(8, 6))
 
+    for i, pid in enumerate(unique_ids):
+        mask = data[:, 1] == pid
+        x = data[mask, 3]  # X positions
+        y = data[mask, 4]  # Y positions
+
+        # Choose color
+        if i == 0:
+            edgecolor = 'blue'
+            label = f"Particle {int(pid)}"
+        elif i == 1:
+            edgecolor = 'red'
+            label = f"Particle {int(pid)}"
+        else:
+            continue  # Skip others for clarity
+
+        # Plot hollow circles
+        plt.scatter(x, y, s=40, facecolors='none', edgecolors=edgecolor, label=label, linewidths=1.5)
+
+    plt.xlabel("X Position")
+    plt.ylabel("Y Position")
+    plt.title("2D Particle Trajectories - Test 3")
+    plt.grid(True)
+    plt.legend(loc='upper right', fontsize='medium')
+    plt.xlim(0, limit)
+    plt.ylim(0, limit)
+    plt.tight_layout()
+
+    plt.savefig(save_path)
+    plt.show(block=True)
 # Run plots
 if __name__ == "__main__":
     plot_kinetic_energy()
+    plot_xy_trajectories()
     animate_xy_plane()
-    animate_3d_trajectory()
+    # animate_3d_trajectory()

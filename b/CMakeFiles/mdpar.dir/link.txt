@@ -1,1 +1,0 @@
-/usr/bin/c++  -O2 -Wall CMakeFiles/mdpar.dir/mdmPsingNP.cpp.o -o mdpar  /usr/lib/x86_64-linux-gnu/libboost_program_options.so.1.74.0 /usr/lib/x86_64-linux-gnu/libblas.so /usr/lib/gcc/x86_64-linux-gnu/12/libgomp.so /usr/lib/x86_64-linux-gnu/libpthread.a 

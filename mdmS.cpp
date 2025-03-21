@@ -71,65 +71,65 @@ bool far_enough(double x, double y, double z, double* x_arr, double* y_arr, doub
  * @param initial_condition Selected initial condition.
  */
 
-void init_particle(double* x, double* y, double* z, double* vx, double* vy, double* vz, int* type,int N, double Lx, double Ly, double Lz,double m0, double m1, double& percent_type1,std::string initial_condition) {
+ void init_particle(double* x, double* y, double* z, double* vx, double* vy, double* vz, int* type, double* m,int N, double Lx, double Ly, double Lz,double m0, double m1, double& percent_type1,std::string initial_condition) {
     srand(time(0));
 
     if (initial_condition == "ic-one") {
         // **Test Case 1: One stationary particle**
         x[0] = 10.0; y[0] = 10.0; z[0] = 10.0;
         vx[0] = 0.0; vy[0] = 0.0; vz[0] = 0.0;
-        type[0] = 0; 
+        type[0] = 0; m[0] = m0;
         percent_type1=0.0;
     } 
     else if (initial_condition == "ic-one-vel") {
         // **Test Case 2: One moving particle**
         x[0] = 10.0; y[0] = 10.0; z[0] = 10.0;
         vx[0] = 5.0; vy[0] = 2.0; vz[0] = 1.0;
-        type[0] = 0; 
+        type[0] = 0; m[0] = m0;
         percent_type1=0.0;
     } 
     else if (initial_condition == "ic-two") {
         // **Test Case 3: Two bouncing particles**
         x[0] = 8.5; y[0] = 10.0; z[0] = 10.0;
         vx[0] = 0.0; vy[0] = 0.0; vz[0] = 0.0;
-        type[0] = 0; 
+        type[0] = 0; m[0] = m0;
 
         x[1] = 11.5; y[1] = 10.0; z[1] = 10.0;
         vx[1] = 0.0; vy[1] = 0.0; vz[1] = 0.0;
-        type[1] = 0; 
+        type[1] = 0; m[1] = m0;
         percent_type1=0.0;
     }
     else if (initial_condition == "ic-two-pass1") {
         // **Test Case 4: Two passing particles**
         x[0] = 8.5; y[0] = 11.5; z[0] = 10.0;
         vx[0] = 0.5; vy[0] = 0.0; vz[0] = 0.0;
-        type[0] = 0; 
+        type[0] = 0; m[0] = m0;
 
         x[1] = 11.5; y[1] = 8.5; z[1] = 10.0;
         vx[1] = -0.5; vy[1] = 0.0; vz[1] = 0.0;
-        type[1] = 0; 
+        type[1] = 0; m[1] = m0;
         percent_type1=0.0;
     }
     else if (initial_condition == "ic-two-pass2") {
         // **Test Case 5: Two passing particles close**
         x[0] = 8.5; y[0] = 11.3; z[0] = 10.0;
         vx[0] = 0.5; vy[0] = 0.0; vz[0] = 0.0;
-        type[0] = 0; 
+        type[0] = 0; m[0] = m0;
 
         x[1] = 11.5; y[1] = 8.7; z[1] = 10.0;
         vx[1] = -0.5; vy[1] = 0.0; vz[1] = 0.0;
-        type[1] = 0; 
+        type[1] = 0; m[1] = m0;
         percent_type1=0.0;
     }
     else if (initial_condition == "ic-two-pass3") {
         // **Test Case 6: Two passing heavy particles**
         x[0] = 8.5; y[0] = 11.3; z[0] = 10.0;
         vx[0] = 0.5; vy[0] = 0.0; vz[0] = 0.0;
-        type[0] = 1; 
+        type[0] = 1; m[0] = m1;
 
         x[1] = 11.5; y[1] = 8.7; z[1] = 10.0;
         vx[1] = -0.5; vy[1] = 0.0; vz[1] = 0.0;
-        type[1] = 1; 
+        type[1] = 1; m[1] = m1;
         percent_type1=100.0;
     }
     else if (initial_condition == "ic-random") {
@@ -140,10 +140,10 @@ void init_particle(double* x, double* y, double* z, double* vx, double* vy, doub
 
             if (i < N * percent_type1 / 100.0) {
                 type[i] = 1;
-                
+                m[i] = m1;
             } else {
                 type[i] = 0;
-                
+                m[i] = m0;
             }
 
             x[i]=Lx*(double)rand()/RAND_MAX;
@@ -251,10 +251,12 @@ void compute_forces(double* x, double* y, double* z, double* fx, double* fy, dou
  * @param dt Time step size.
  */
 void update_positions(double* x, double* y, double* z, double* vx, double* vy, double* vz, int N, double dt) {
-    cblas_daxpy(N, dt, vx, 1, x, 1);  // x = dt * vx + x
-    cblas_daxpy(N, dt, vy, 1, y, 1);  // y = dt * vy + y
-    cblas_daxpy(N, dt, vz, 1, z, 1);  // z = dt * vz + z
-}
+    
+    for(int i=0; i<N; i++){
+        x[i] += dt * vx[i];
+        y[i] += dt * vy[i];
+        z[i] += dt * vz[i];
+}}
     
 /**
  * @brief Updates particle velocities using computed forces and mass properties.
@@ -270,24 +272,14 @@ void update_positions(double* x, double* y, double* z, double* vx, double* vy, d
  * @param N1 Number of type 1 particles.
  * @param dt Time step.
  */
-void update_velocities(double* vx, double* vy, double* vz, double* fx, double* fy, double* fz, double m0,double m1, int N0,int N1, double dt) {
+void update_velocities(double* vx, double* vy, double* vz, double* fx, double* fy, double* fz, double* m, int N, double dt) {
     
-
-    double factor0 = dt / m0;   // For type 0 particles (mass = 1)
-    double factor1 = dt / m1;  // For type 1 particles (mass = 10)
-
-    // Apply daxpy separately for type 1 and type 0 particles
-    if (N1 > 0) {
-        cblas_daxpy(N1, factor1, fx, 1, vx, 1);
-        cblas_daxpy(N1, factor1, fy, 1, vy, 1);
-        cblas_daxpy(N1, factor1, fz, 1, vz, 1);
+    for (int i = 0; i < N; i++) {
+        vx[i] += dt * fx[i] / m[i];
+        vy[i] += dt * fy[i] / m[i];
+        vz[i] += dt * fz[i] / m[i];
     }
-    
-    if (N0 > 0) {
-        cblas_daxpy(N0, factor0, fx + N1, 1, vx + N1, 1);
-        cblas_daxpy(N0, factor0, fy + N1, 1, vy + N1, 1);
-        cblas_daxpy(N0, factor0, fz + N1, 1, vz + N1, 1);
-    }}
+}
 
 /**
  * @brief Applies boundary conditions by reflecting particles off walls.
@@ -324,18 +316,14 @@ void apply_boundary_conditions(double* x, double* y, double* z, double* vx, doub
  * @param N1 Number of type 1 particles.
  * @return Computed temperature.
  */
-double compute_temperature(double* vx, double* vy, double* vz, double m0,double m1,int N0, int N1) {
+double compute_temperature(double* vx, double* vy, double* vz, double* m, int N) {
     double kinetic_energy = 0.0;
     double boltz=0.8314459920816467;
-    for (int i = 0; i < N0; i++) {  // Type 0 (mass m0)
-        kinetic_energy += 0.5 * m0 * (vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i]);
+    for (int i = 0; i < N; i++) {
+        kinetic_energy += 0.5 * m[i] * (vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i]);
     }
 
-    for (int i = N0; i < (N0 + N1); i++) {  // Type 1 (mass m1)
-        kinetic_energy += 0.5 * m1 * (vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i]);
-    }
-
-    return (2.0 / (3.0 * boltz * (N0 + N1))) * kinetic_energy;  
+    return (2.0 / (3.0 * boltz * (N))) * kinetic_energy;  
 }
 /**
  * @brief Computes the system temperature based on kinetic energy.
@@ -348,17 +336,12 @@ double compute_temperature(double* vx, double* vy, double* vz, double m0,double 
  * @param N1 Number of type 1 particles.
  * @return Computed temperature.
  */
-double compute_KE(double* vx, double* vy, double* vz, double m0,double m1, int N0, int N1) {
+double compute_KE(double* vx, double* vy, double* vz, double* m, int N) {
     double kinetic_energy = 0.0;
     
-    for (int i = 0; i < N0; i++) {  // Type 0 (mass m0)
-        kinetic_energy += 0.5 * m0 * (vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i]);
+    for (int i = 0; i < N; i++) {
+        kinetic_energy += 0.5 * m[i] * (vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i]);
     }
-
-    for (int i = N0; i < (N0 + N1); i++) {  // Type 1 (mass m1)
-        kinetic_energy += 0.5 * m1 * (vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i]);
-    }
-
     return kinetic_energy;  
 }
 
@@ -373,14 +356,14 @@ double compute_KE(double* vx, double* vy, double* vz, double m0,double m1, int N
  * @param N1 Number of type 1 particles.
  * @param T_target Target temperature.
  */
-void scale_velocities(double* vx, double* vy, double* vz, double m0,double m1,int N0, int N1, double T_target) {
-    double T_current = compute_temperature(vx, vy, vz, m0,m1,N0, N1);
+void scale_velocities(double* vx, double* vy, double* vz, double* m, int N, double T_target) {
+    double T_current = compute_temperature(vx, vy, vz, m, N);
 
     if (T_current == 0.0) return;  // Avoid division by zero
 
         double scale_factor = sqrt(T_target / T_current);
 
-    for (int i = 0; i < (N0+N1); i++) {
+    for (int i = 0; i < N; i++) {
         vx[i] *= scale_factor;
         vy[i] *= scale_factor;
         vz[i] *= scale_factor;
@@ -614,6 +597,8 @@ int main(int argc, char** argv) {
     double* fy = new double[N]; 
     double* fz = new double[N];
     int* type = new int[N];
+    double* m = new double[N]; 
+
     double m0 = 1.0;
     double m1 = 10.0;
     char test = 'y';
@@ -622,10 +607,7 @@ int main(int argc, char** argv) {
     if (test == 'y') {
         cout<<initial_condition<<endl;    }
 
-    init_particle(x, y, z, vx, vy, vz, type, N, Lx, Ly, Lz, m0, m1, percent_type1,initial_condition);
-    int N1 = static_cast<int>(N * percent_type1 / 100.0); // Number of type 1 particles
-    int N0 = N - N1; // Number of type 0 particles
-    
+    init_particle(x, y, z, vx, vy, vz, type, m, N, Lx, Ly, Lz, m0, m1, percent_type1,initial_condition);    
     std::ofstream kinetic_file("kinetic_energy.txt", std::ofstream::trunc);
     std::ofstream particle_file("particles.txt", std::ofstream::trunc);
 
@@ -633,7 +615,7 @@ int main(int argc, char** argv) {
     // Create text files in overwrite mode
     
     if (temperature > 0.0) {
-        scale_velocities(vx, vy, vz, m0, m1, N0, N1, temperature);
+        scale_velocities(vx, vy, vz, m, N, temperature);
     }
     /////////////////////// Numerical Loop /////////////////////////
     int steps = T_tot / dt;
@@ -644,7 +626,7 @@ int main(int argc, char** argv) {
     for (int t = 0; t < steps; t++) {
         
         if (t%writestep==0) {  // Write data every 0.1 time units
-            double K = compute_KE(vx, vy, vz, m0, m1, N0, N1);
+            double K = compute_KE(vx, vy, vz, m, N);
             kinetic_file << time << " " << K << "\n";
             if(test=='y'){
                 for (int i = 0; i < N; i++) {
@@ -655,10 +637,10 @@ int main(int argc, char** argv) {
             }
         }
         compute_forces(x, y, z, fx, fy, fz, type, N, min_sep,test);
-        update_velocities(vx, vy, vz, fx, fy, fz, m0, m1, N0, N1, dt);
+        update_velocities(vx, vy, vz, fx, fy, fz, m, N, dt);
         // Temperature Change - only if temp is set
         if (temperature > 0.0) {
-            scale_velocities(vx, vy, vz, m0, m1, N0, N1, temperature);
+            scale_velocities(vx, vy, vz, m, N, temperature);
         }
         update_positions(x, y, z, vx, vy, vz, N, dt);
         
