@@ -1,0 +1,2 @@
+Running with 1 thread(s)
+slurmstepd-dragon: error: *** JOB 30617 ON dragon CANCELLED AT 2025-03-23T20:09:19 DUE TO TIME LIMIT ***

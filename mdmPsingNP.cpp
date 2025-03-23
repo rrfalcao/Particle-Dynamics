@@ -265,12 +265,9 @@ bool far_enough(double x, double y, double z, double* x_arr, double* y_arr, doub
  */
 void update_positions(double* x, double* y, double* z, double* vx, double* vy, double* vz, int N, double dt,double& max_dim) {
     
-    #pragma omp parallel for 
+    #pragma omp parallel for simd
     for(int i=0; i<N; i++){
-        // Check if particles leave the box
-        if(x[i]>max_dim){
-            max_dim=x[i];
-        }
+        
         x[i] += dt * vx[i];
         y[i] += dt * vy[i];
         z[i] += dt * vz[i]; 

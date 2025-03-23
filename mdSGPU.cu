@@ -23,7 +23,7 @@
 #include <cuda_runtime.h>
 namespace po = boost::program_options;
 using namespace std;
-#define BLOCK_SIZE 128
+#define BLOCK_SIZE 16
 /**
  * @brief Checks if a new particle is far enough from existing particles before placing it.
  * 
@@ -195,14 +195,12 @@ __global__ void compute_forces_gpu(double* x, double* y, double* z,
     double fx_i = 0.0, fy_i = 0.0, fz_i = 0.0;
 
     for (int j = i + 1; j < N; j++) {  // Avoid redundant calculations
-        if (j >= N) continue; 
+        
         double dx = x[i] - x[j];
         double dy = y[i] - y[j];
         double dz = z[i] - z[j];
 
         double r2 = dx * dx + dy * dy + dz * dz;
-        if (r2 == 0) continue;  // Avoid division by zero
-
         double r6 = r2 * r2 * r2;
         double sig6 = sigma6[type[i]][type[j]];
         double eps24 = epsilon24[type[i]][type[j]];
@@ -240,7 +238,7 @@ void compute_forces(double* x, double* y, double* z,
     cudaMemset(fz, 0, N * sizeof(double));
 
     compute_forces_gpu<<<num_blocks, BLOCK_SIZE>>>(x, y, z, fx, fy, fz, type, N);
-    // cudaDeviceSynchronize();
+    
 }
 /**
  * @brief Updates particle positions using velocity integration.
@@ -269,7 +267,6 @@ void update_positions(double* x, double* y, double* z,
     int N, double dt) {
     int num_blocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
     update_positions_gpu<<<num_blocks, BLOCK_SIZE>>>(x, y, z, vx, vy, vz, N, dt);
-    // cudaDeviceSynchronize(); // Optional if no immediate CPU access
 }
     
 /**
@@ -301,7 +298,7 @@ void update_velocities(double* vx, double* vy, double* vz,
     double* m, int N, double dt) {
     int num_blocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
     update_velocities_gpu<<<num_blocks, BLOCK_SIZE>>>(vx, vy, vz, fx, fy, fz, m, N, dt);
-    // cudaDeviceSynchronize(); // Optional
+    
 }
 
 /**
@@ -337,8 +334,10 @@ void apply_boundary_conditions(double* x, double* y, double* z,
     int N, double Lx, double Ly, double Lz) {
     int num_blocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
     apply_boundary_conditions_gpu<<<num_blocks, BLOCK_SIZE>>>(x, y, z, vx, vy, vz, N, Lx, Ly, Lz);
-    cudaDeviceSynchronize();
+    
 }
+
+
 /**
  * @brief Computes the system temperature based on kinetic energy.
  * @param vx X-velocity array.
@@ -376,25 +375,7 @@ __global__ void compute_temperature_gpu(const double* vx, const double* vy, cons
     if (tid == 0)
         partial_sum[blockIdx.x] = temp_sum[0];
 }
-double compute_temperature(double* vx, double* vy, double* vz, double* m, int N) {
-    const double boltz = 0.8314459920816467;
-    int num_blocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
-    double* d_partial_sum;
-    cudaMallocManaged(&d_partial_sum, num_blocks * sizeof(double));
-
-    compute_temperature_gpu<<<num_blocks, BLOCK_SIZE>>>(vx, vy, vz, m, d_partial_sum, N);
-    cudaDeviceSynchronize();
-
-    // Final sum on CPU (since num_blocks is small)
-    double total_ke = 0.0;
-    for (int i = 0; i < num_blocks; ++i) {
-        total_ke += d_partial_sum[i];
-    }
-
-    cudaFree(d_partial_sum);
-    return (2.0 / (3.0 * boltz * N)) * total_ke;
-}
 /**
  * @brief Computes the system temperature based on kinetic energy.
  * @param vx X-velocity array.
@@ -410,18 +391,21 @@ double compute_KE(double* vx, double* vy, double* vz, double* m, int N) {
     int num_blocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
     double* d_partial_sum;
+    double* h_partial_sum = new double[num_blocks];
     cudaMallocManaged(&d_partial_sum, num_blocks * sizeof(double));
 
     compute_temperature_gpu<<<num_blocks, BLOCK_SIZE>>>(vx, vy, vz, m, d_partial_sum, N);
     cudaDeviceSynchronize();
+    cudaMemcpy(h_partial_sum, d_partial_sum, num_blocks * sizeof(double), cudaMemcpyDeviceToHost);
 
-    double total_ke = 0.0;
+    double KE_Tot = 0.0;
     for (int i = 0; i < num_blocks; ++i) {
-        total_ke += d_partial_sum[i];
+        KE_Tot += h_partial_sum[i];
     }
 
     cudaFree(d_partial_sum);
-    return total_ke;
+    delete[] h_partial_sum;
+    return KE_Tot;
 }
 
 /**
@@ -446,15 +430,30 @@ double compute_KE(double* vx, double* vy, double* vz, double* m, int N) {
 }
 
 void scale_velocities(double* vx, double* vy, double* vz, double* m, int N, double T_target) {
-    double T_current = compute_temperature(vx, vy, vz, m, N);  // Already on GPU
+    const double boltz = 0.8314459920816467;
+    int num_blocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
-    if (T_current == 0.0) return;  // Avoid division by zero
+    double* d_partial_sum;
+    double* h_partial_sum = new double[num_blocks];
+    cudaMalloc(&d_partial_sum, num_blocks * sizeof(double));
+
+    compute_temperature_gpu<<<num_blocks, BLOCK_SIZE>>>(vx, vy, vz, m, d_partial_sum, N);
+    cudaDeviceSynchronize();
+    cudaMemcpy(h_partial_sum, d_partial_sum, num_blocks * sizeof(double), cudaMemcpyDeviceToHost);
+
+    double KE_Tot = 0.0;
+    for (int i = 0; i < num_blocks; ++i) {
+        KE_Tot += h_partial_sum[i];
+    }
+
+    cudaFree(d_partial_sum);
+    delete[] h_partial_sum;
+
+    double T_current = (2.0 / (3.0 * boltz * N)) * KE_Tot;
+    if (T_current == 0.0) return;
 
     double scale_factor = sqrt(T_target / T_current);
-
-    int num_blocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
     scale_velocities_gpu<<<num_blocks, BLOCK_SIZE>>>(vx, vy, vz, N, scale_factor);
-    // cudaDeviceSynchronize();
 }
 
 /**
@@ -613,9 +612,9 @@ int main(int argc, char** argv) {
     int N = 8;
     double percent_type1 = 10.0;
     string initial_condition;
-    bool end = false;
+    bool end=true;
     double temperature = 0.0;
-    double min_sep = Lx;
+    
 
     ////////////////////////// Command Line Configuration ///////////////////////////////////
     po::options_description opts("Allowed options");
@@ -645,7 +644,7 @@ int main(int argc, char** argv) {
         std::cout << opts << std::endl;
         return 0;
     }
-
+    double min_sep = Lx;
     
     if (vm.count("ic-one")) { initial_condition = "ic-one"; N = 1; }
     if (vm.count("ic-one-vel")) { initial_condition = "ic-one-vel"; N = 1; }
@@ -672,67 +671,62 @@ int main(int argc, char** argv) {
     //////////////////////////////////////////////////////////////////////
 
 
-    // **Allocate Memory for Particles**
+    //////////////////////// Memory allocation /////////////////////////
     
-    double *x, *y, *z, *vx, *vy, *vz, *fx, *fy, *fz, *m;
-    int *type;
-    cudaMallocManaged(&x, N * sizeof(double));
-    cudaMallocManaged(&y, N * sizeof(double));
-    cudaMallocManaged(&z, N * sizeof(double));
-    cudaMallocManaged(&vx, N * sizeof(double));
-    cudaMallocManaged(&vy, N * sizeof(double));
-    cudaMallocManaged(&vz, N * sizeof(double));
-    cudaMallocManaged(&fx, N * sizeof(double));
-    cudaMallocManaged(&fy, N * sizeof(double));
-    cudaMallocManaged(&fz, N * sizeof(double));
-    cudaMallocManaged(&m, N * sizeof(double));
-    cudaMallocManaged(&type, N * sizeof(int));
+    double* h_x = new double[N];
+    double* h_y = new double[N];
+    double* h_z = new double[N];
+    double* h_vx = new double[N];
+    double* h_vy = new double[N];
+    double* h_vz = new double[N];
+    double* h_m  = new double[N];
+    int* h_type = new int[N];
     double m0 = 1.0;
     double m1 = 10.0;
-    char test = 'y';
-    if (initial_condition == "ic-random") {
-        test='n';  }
-    if (test == 'y') {
+
+    double *d_x, *d_y, *d_z, *d_vx, *d_vy, *d_vz, *d_fx, *d_fy, *d_fz, *d_m;
+    int* d_type;
+
+    cudaMalloc(&d_x, N * sizeof(double));
+    cudaMalloc(&d_y, N * sizeof(double));
+    cudaMalloc(&d_z, N * sizeof(double));
+    cudaMalloc(&d_vx, N * sizeof(double));
+    cudaMalloc(&d_vy, N * sizeof(double));
+    cudaMalloc(&d_vz, N * sizeof(double));
+    cudaMalloc(&d_fx, N * sizeof(double));
+    cudaMalloc(&d_fy, N * sizeof(double));
+    cudaMalloc(&d_fz, N * sizeof(double));
+    cudaMalloc(&d_m,  N * sizeof(double));
+    cudaMalloc(&d_type, N * sizeof(int));
+
+    ///////////////////////////////////////////////////
+    bool test = (initial_condition != "ic-random");
+
+    if (test) {
         cout<<initial_condition<<endl;    }
 
     
-        // ========== CUDA allocation error checking ==========
-    auto check_cuda = [](cudaError_t err, const char* name) {
-        if (err != cudaSuccess) {
-            std::cerr << "cudaMallocManaged failed for " << name << ": "
-                    << cudaGetErrorString(err) << std::endl;
-            exit(EXIT_FAILURE);
-        }
-    };
+    
 
-    check_cuda(cudaMallocManaged(&x, N * sizeof(double)), "x");
-    check_cuda(cudaMallocManaged(&y, N * sizeof(double)), "y");
-    check_cuda(cudaMallocManaged(&z, N * sizeof(double)), "z");
-    check_cuda(cudaMallocManaged(&vx, N * sizeof(double)), "vx");
-    check_cuda(cudaMallocManaged(&vy, N * sizeof(double)), "vy");
-    check_cuda(cudaMallocManaged(&vz, N * sizeof(double)), "vz");
-    check_cuda(cudaMallocManaged(&fx, N * sizeof(double)), "fx");
-    check_cuda(cudaMallocManaged(&fy, N * sizeof(double)), "fy");
-    check_cuda(cudaMallocManaged(&fz, N * sizeof(double)), "fz");
-    check_cuda(cudaMallocManaged(&m, N * sizeof(double)), "m");
-    check_cuda(cudaMallocManaged(&type, N * sizeof(int)), "type");
-    init_particle(x, y, z, vx, vy, vz, type, m, N, Lx, Ly, Lz, m0, m1, percent_type1,initial_condition);    
+    ////////// Initislise on CPU and copy to GPU /////////////////////////
+    init_particle(h_x, h_y, h_z, h_vx, h_vy, h_vz, h_type, h_m, N, Lx, Ly, Lz, m0, m1, percent_type1, initial_condition);
+    cudaMemcpy(d_x, h_x, N * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_y, h_y, N * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_z, h_z, N * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_vx, h_vx, N * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_vy, h_vy, N * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_vz, h_vz, N * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_m, h_m, N * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_type, h_type, N * sizeof(int), cudaMemcpyHostToDevice);
+    /////////////////////////////////////////////////////////////////////
+    
     std::ofstream kinetic_file("kinetic_energy.txt", std::ofstream::trunc);
 
-    // ========== Basic safety checks before simulation ==========
-    for (int i = 0; i < N; ++i) {
-        if (!std::isfinite(x[i]) || !std::isfinite(vx[i]) || !std::isfinite(m[i])) {
-            std::cerr << "Particle " << i << " has invalid data: "
-                    << "x=" << x[i] << ", vx=" << vx[i] << ", m=" << m[i] << std::endl;
-            exit(EXIT_FAILURE);
-        }
-    }
-    std::cout << "Initial data validated. Starting simulation..." << std::endl;
-
-    // Create text files in overwrite mode
+    
     
     if (temperature > 0.0) {
-        scale_velocities(vx, vy, vz, m, N, temperature);
+        scale_velocities(d_vx, d_vy, d_vz, d_m, N, temperature);
+
     }
     /////////////////////// Numerical Loop /////////////////////////
     int steps = T_tot / dt;
@@ -743,37 +737,62 @@ int main(int argc, char** argv) {
     for (int t = 0; t < steps; t++) {
         
         if (t%writestep==0) {  // Write data every 0.1 time units
-            double K = compute_KE(vx, vy, vz, m, N);
+            double K = compute_KE(d_vx, d_vy, d_vz, d_m, N);
             kinetic_file << time << " " << K << "\n";
         }
-        compute_forces(x, y, z, fx, fy, fz, type, N);
-        update_velocities(vx, vy, vz, fx, fy, fz, m, N, dt);
+        compute_forces(d_x, d_y, d_z, d_fx, d_fy, d_fz, d_type, N);
+
+        update_velocities(d_vx, d_vy, d_vz, d_fx, d_fy, d_fz, d_m, N, dt);
         // Temperature Change - only if temp is set
         if (temperature > 0.0) {
-            scale_velocities(vx, vy, vz, m, N, temperature);
+            scale_velocities(d_vx, d_vy, d_vz, d_m, N, temperature);
         }
-        update_positions(x, y, z, vx, vy, vz, N, dt);
+        update_positions(d_x, d_y, d_z, d_vx, d_vy, d_vz, N, dt);
+
+        apply_boundary_conditions(d_x, d_y, d_z, d_vx, d_vy, d_vz, N, Lx, Ly, Lz);
         
-        
-        if (test=='y') {
-            unit_tests(initial_condition, time, min_sep, x, y, vx, vy, N, Lx, Ly,end);
+        if (test) {
+            cudaMemcpy(h_x, d_x, N * sizeof(double), cudaMemcpyDeviceToHost);
+            cudaMemcpy(h_y, d_y, N * sizeof(double), cudaMemcpyDeviceToHost);
+            cudaMemcpy(h_vx, d_vx, N * sizeof(double), cudaMemcpyDeviceToHost);
+            cudaMemcpy(h_vy, d_vy, N * sizeof(double), cudaMemcpyDeviceToHost);
+            double r;
+            for (int i = 0; i < N; ++i) {
+                for (int j = i + 1; j < N; ++j) {
+                    double dx = h_x[i] - h_x[j];
+                    double dy = h_y[i] - h_y[j];
+                    double dz = h_z[i] - h_z[j];
+                    r = sqrt(dx * dx + dy * dy + dz * dz);
+                    if (r < min_sep) {
+                        min_sep = r;
+                    }
+                }
+            }
+            
+            unit_tests(initial_condition, time, min_sep, h_x, h_y, h_vx, h_vy, N, Lx, Ly,end);
         }
 
-        apply_boundary_conditions(x, y, z, vx, vy, vz, N, Lx, Ly, Lz);
+        
+
 
         time += dt;
     }
-
-    end=true;
-    if (test=='y') {
-        unit_tests(initial_condition, time, min_sep, x, y, vx, vy, N, Lx, Ly,end);
+    end=false;
+    if (test) {
+        unit_tests(initial_condition, time, min_sep, h_x, h_y, h_vx, h_vy, N, Lx, Ly,end);
     }
+    
+    
 
     /////// Cleanup Section ///////////
-    cudaFree(x); cudaFree(y); cudaFree(z);
-    cudaFree(vx); cudaFree(vy); cudaFree(vz);
-    cudaFree(fx); cudaFree(fy); cudaFree(fz);
-    cudaFree(m); cudaFree(type);
+    cudaFree(d_x); cudaFree(d_y); cudaFree(d_z);
+    cudaFree(d_vx); cudaFree(d_vy); cudaFree(d_vz);
+    cudaFree(d_fx); cudaFree(d_fy); cudaFree(d_fz);
+    cudaFree(d_m); cudaFree(d_type);
+    delete[] h_x; delete[] h_y; delete[] h_z;
+    delete[] h_vx; delete[] h_vy; delete[] h_vz;
+    delete[] h_m; delete[] h_type;
+    kinetic_file.close();
     auto end_time = std::chrono::high_resolution_clock::now();
     double time_new = std::chrono::duration<double, std::milli>(end_time - start_time).count();
     cout<<"Time taken: "<<time_new/1000<<" s"<<endl;

@@ -538,7 +538,7 @@ int main(int argc, char** argv) {
         ("Ly", po::value<double>(&Ly)->default_value(20.0), "y length (Angstroms)")
         ("Lz", po::value<double>(&Lz)->default_value(20.0), "z length (Angstroms)")
         ("dt", po::value<double>(&dt)->default_value(0.001), "Time step")
-        ("T", po::value<double>(&T_tot)->default_value(50.0), "Final time")
+        ("T", po::value<double>(&T_tot)->default_value(40.0), "Final time")
         ("N", po::value<int>(&N)->default_value(8), "Number of particles")
         ("percent-type1", po::value<double>(&percent_type1)->default_value(10.0), "Percentage of type 1 particles")
         ("ic-one", "Initial condition: one stationary particle")
@@ -611,7 +611,7 @@ int main(int argc, char** argv) {
     std::ofstream kinetic_file("kinetic_energy.txt", std::ofstream::trunc);
     std::ofstream particle_file("particles.txt", std::ofstream::trunc);
 
-
+        
     // Create text files in overwrite mode
     
     if (temperature > 0.0) {

@@ -178,7 +178,7 @@ bool far_enough(double x, double y, double z, double* x_arr, double* y_arr, doub
  * @param test Flag for unit testing.
  */
 
-void compute_forces(double* x, double* y, double* z, double* fx, double* fy, double* fz, int* type, int N, double& min_sep,char test) {
+ void compute_forces(double* x, double* y, double* z, double* fx, double* fy, double* fz, int* type, int N, double& min_sep,char test) {
 
     // Reset forces
     fill(fx, fx + N, 0.0);
@@ -539,7 +539,7 @@ int main(int argc, char** argv) {
         ("Ly", po::value<double>(&Ly)->default_value(20.0), "y length (Angstroms)")
         ("Lz", po::value<double>(&Lz)->default_value(20.0), "z length (Angstroms)")
         ("dt", po::value<double>(&dt)->default_value(0.001), "Time step")
-        ("T", po::value<double>(&T_tot)->default_value(50.0), "Final time")
+        ("T", po::value<double>(&T_tot)->default_value(40.0), "Final time")
         ("N", po::value<int>(&N)->default_value(8), "Number of particles")
         ("percent-type1", po::value<double>(&percent_type1)->default_value(10.0), "Percentage of type 1 particles")
         ("ic-one", "Initial condition: one stationary particle")
@@ -608,10 +608,11 @@ int main(int argc, char** argv) {
     if (test == 'y') {
         cout<<initial_condition<<endl;    }
 
-    init_particle(x, y, z, vx, vy, vz, type, m, N, Lx, Ly, Lz, m0, m1, percent_type1,initial_condition);init_particle(x, y, z, vx, vy, vz, type, m, N, Lx, Ly, Lz, m0, m1, percent_type1,initial_condition);    
+    init_particle(x, y, z, vx, vy, vz, type, m, N, Lx, Ly, Lz, m0, m1, percent_type1,initial_condition);    
     std::ofstream kinetic_file("kinetic_energy.txt", std::ofstream::trunc);
+    std::ofstream particle_file("particles.txt", std::ofstream::trunc);
 
-
+        
     // Create text files in overwrite mode
     
     if (temperature > 0.0) {
@@ -628,6 +629,13 @@ int main(int argc, char** argv) {
         if (t%writestep==0) {  // Write data every 0.1 time units
             double K = compute_KE(vx, vy, vz, m, N);
             kinetic_file << time << " " << K << "\n";
+            if(test=='y'){
+                for (int i = 0; i < N; i++) {
+                    particle_file << time << " " << i << " " << type[i] << " "
+                                  << x[i] << " " << y[i] << " " << z[i] << " "
+                                  << vx[i] << " " << vy[i] << " " << vz[i] << "\n";
+                }
+            }
         }
         compute_forces(x, y, z, fx, fy, fz, type, N, min_sep,test);
         update_velocities(vx, vy, vz, fx, fy, fz, m, N, dt);

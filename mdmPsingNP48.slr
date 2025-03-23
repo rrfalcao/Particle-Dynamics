@@ -1,0 +1,32 @@
+#!/bin/bash
+#SBATCH --job-name=md_omp_48t
+#SBATCH --output=slurm-md-48t.txt
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=48
+#SBATCH --mem=192000MB
+#SBATCH --time=06:00:00
+#SBATCH --partition=short
+
+
+
+
+
+# Compile with OpenMP support
+g++ -o mdmPsingNP mdmPsingNP.cpp -fopenmp -lblas -lboost_program_options
+
+echo "Running with $SLURM_CPUS_PER_TASK thread(s)"
+export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
+
+start=$(date +%s)
+# Run the program
+./mdmPsingNP --ic-random --N 10000 --T 10 --temp 30 --Lx 50 --Ly 50 --Lz 50
+end=$(date +%s)
+elapsed=$((end - start))
+
+
+
+echo "Bash-timed execution time: ${elapsed} seconds"
+
+
+cat kinetic_energy.txt >> mdmPsing_KE_${SLURM_CPUS_PER_TASK}.txt

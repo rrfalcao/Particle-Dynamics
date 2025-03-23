@@ -7,17 +7,19 @@ from mpl_toolkits.mplot3d import Axes3D
 
 matplotlib.use("TkAgg")  # Ensure plots open in a separate window
 limit =20
+test=3
+
 # Load kinetic energy data and plot
-def plot_kinetic_energy(filename="kinetic_energy.txt", save_path="kinetic_energy.png"):
+def plot_kinetic_energy(filename="kinetic_energy.txt", save_path=f"KE_Test_{test}.png"):
     data = np.loadtxt(filename)
     time = data[:, 0]
     kinetic_energy = data[:, 1]
 
     plt.figure(figsize=(8, 5))
     plt.plot(time, kinetic_energy, marker="o", linestyle="-", color="b", markersize=3)
-    plt.xlabel("Time (units)")
+    plt.xlabel("Time")
     plt.ylabel("Kinetic Energy")
-    plt.title("Kinetic Energy vs. Time")
+    plt.title(f"Kinetic Energy vs. Time - Test {test}")
     plt.grid(True)
     plt.tight_layout()
     
@@ -112,44 +114,56 @@ def animate_3d_trajectory(filename="particles.txt"):
 
     plt.show(block=True)  # Ensure animation opens in a new window
 # Static 2D XY trajectory plot
-def plot_xy_trajectories(filename="particles.txt", save_path="xy_trajectories.png"):
+def plot_xy_trajectories(filename="particles.txt", save_path=f"Traj_Test_{test}.png"):
     data = np.loadtxt(filename)
-    unique_ids = np.unique(data[:, 1])  # Particle IDs (assumed column 1)
-
+    unique_ids = np.unique(data[:, 1])  # Particle IDs (column 1)
+    start_positions = {}
     plt.figure(figsize=(8, 6))
 
     for i, pid in enumerate(unique_ids):
         mask = data[:, 1] == pid
-        x = data[mask, 3]  # X positions
-        y = data[mask, 4]  # Y positions
-
-        # Choose color
+        x = data[mask, 3]
+        y = data[mask, 4]
+        
+        # Assign color and size
         if i == 0:
             edgecolor = 'blue'
+            size = 10
             label = f"Particle {int(pid)}"
+            
         elif i == 1:
             edgecolor = 'red'
+            size = 8  # Slightly smaller
             label = f"Particle {int(pid)}"
+            
         else:
-            continue  # Skip others for clarity
+            continue  # Skip the rest for clarity
 
-        # Plot hollow circles
-        plt.scatter(x, y, s=40, facecolors='none', edgecolors=edgecolor, label=label, linewidths=1.5)
+        # Plot hollow circles for trajectory
+        plt.scatter(x, y, s=size, facecolors='none', edgecolors=edgecolor, label=label, linewidths=1.5)
+        plt.plot(x, y, linestyle='-', linewidth=0.8, color=edgecolor, alpha=0.6)
+        # Mark start and end points
+        plt.scatter(x[0], y[0], color='black', s=60, zorder=5)
+        start_positions[i] = (x[0], y[0])
+        # Add start/end labels slightly offset
+    plt.text(start_positions[0][0] - 0.2, start_positions[0][1] + 0.2, "Start", color='black', fontsize=9, ha='right', va='bottom')
+    plt.text(start_positions[1][0] + 0.2, start_positions[1][1] - 0.2, "Start", color='black', fontsize=9, ha='left', va='top')
 
     plt.xlabel("X Position")
     plt.ylabel("Y Position")
-    plt.title("2D Particle Trajectories - Test 3")
+    plt.title(f"2D Particle Trajectories - Test {test}")
     plt.grid(True)
     plt.legend(loc='upper right', fontsize='medium')
-    plt.xlim(0, limit)
-    plt.ylim(0, limit)
+    plt.xlim(7.5,12.5)
+    plt.ylim(7.5,12.5)
     plt.tight_layout()
 
     plt.savefig(save_path)
     plt.show(block=True)
+
 # Run plots
 if __name__ == "__main__":
     plot_kinetic_energy()
-    plot_xy_trajectories()
+    # plot_xy_trajectories()
     animate_xy_plane()
     # animate_3d_trajectory()
