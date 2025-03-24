@@ -1,4 +1,0 @@
-Running with 8 thread(s)
-Particles have left the box: 0 Max x dimension: 50
-Execution time: 7674.66 seconds
-Bash-timed execution time: 7675 seconds

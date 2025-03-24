@@ -179,8 +179,11 @@ bool far_enough(double x, double y, double z, double* x_arr, double* y_arr, doub
  * @param test Flag for unit testing.
  */
 
- void compute_forces(double* x, double* y, double* z, double* fx, double* fy, double* fz, int* type, int N, double& min_sep, char test) {
-    // Reset forces efficiently using SIMD
+ void compute_forces_test(double* x, double* y, double* z,
+                    double* fx, double* fy, double* fz,
+                    int* type, int N, double& min_sep, char test) {
+
+    // Reset global forces
     #pragma omp parallel for simd
     for (int i = 0; i < N; i++) {
         fx[i] = 0.0;
@@ -192,22 +195,21 @@ bool far_enough(double x, double y, double z, double* x_arr, double* y_arr, doub
     const double epsilon24[2][2] = {{72.0, 360.0}, {360.0, 1440.0}};
     const double sigma6[2][2] = {{1.0, 64.0}, {64.0, 729.0}};
 
-    int num_threads = omp_get_max_threads();  // Get available threads
-    int total_pairs = N * (N - 1) / 2;  // Total interactions
-    int chunk_size = total_pairs / num_threads; // Even work division
+    int total_pairs = N * (N - 1) / 2;
+    int num_threads = omp_get_max_threads();
 
-    // ** Use Thread-Private Buffers for Forces **
+    // Allocate flat buffers: one block of N for each thread
+    double* fx_private = new double[num_threads * N]();
+    double* fy_private = new double[num_threads * N]();
+    double* fz_private = new double[num_threads * N]();
+
     #pragma omp parallel
     {
-        
-        double* fx_private = new double[N]();  // Local thread buffers
-        double* fy_private = new double[N]();
-        double* fz_private = new double[N]();
+        int tid = omp_get_thread_num();
 
-        // ** Compute Forces with Static Scheduling **
-        #pragma omp for schedule(static, chunk_size)
-        for (int k = 0; k < total_pairs; k++) {
-            int i = floor((2 * N - 1 - sqrt((2 * N - 1) * (2 * N - 1) - 8 * k)) / 2);
+        #pragma omp for schedule(static)
+        for (int k = 0; k < total_pairs; ++k) {
+            int i = static_cast<int>(floor((2 * N - 1 - sqrt((2 * N - 1) * (2 * N - 1) - 8 * k)) / 2));
             int j = k - (i * (2 * N - i - 1) / 2) + i + 1;
 
             double dx = x[i] - x[j];
@@ -215,41 +217,124 @@ bool far_enough(double x, double y, double z, double* x_arr, double* y_arr, doub
             double dz = z[i] - z[j];
 
             double r2 = dx * dx + dy * dy + dz * dz;
-            if(test=='y'){
-                double r = sqrt(r2);
-                if (r < min_sep) {
-                    min_sep = r;  // For Unit Testing
+            if (r2 > 0.0) {
+                if (test == 'y') {
+                    double r = sqrt(r2);
+                    #pragma omp critical
+                    {
+                        if (r < min_sep) min_sep = r;
+                    }
                 }
-            }
-            double r6 = r2 * r2 * r2;
-            double f = epsilon24[type[i]][type[j]] * sigma6[type[i]][type[j]] * (2 * sigma6[type[i]][type[j]] - r6) / (r6 * r6 * r2);
 
-            
-                fx_private[i] += f * dx;    
-                fy_private[i] += f * dy;
-                fz_private[i] += f * dz;
-                fx_private[j] -= f * dx;
-                fy_private[j] -= f * dy;
-                fz_private[j] -= f * dz;
-            
-        }
+                int t1 = type[i];
+                int t2 = type[j];
+                double sig6 = sigma6[t1][t2];
+                double eps24 = epsilon24[t1][t2];
+                double r6 = r2 * r2 * r2;
+                double f = eps24 * sig6 * (2 * sig6 - r6) / (r6 * r6 * r2);
 
-        // ** Reduction: Sum Thread-Private Buffers Into Global Force Arrays **
-        #pragma omp critical
-        {
-            for (int i = 0; i < N; i++) {
-                fx[i] += fx_private[i];
-                fy[i] += fy_private[i];
-                fz[i] += fz_private[i];
+                fx_private[tid * N + i] += f * dx;
+                fy_private[tid * N + i] += f * dy;
+                fz_private[tid * N + i] += f * dz;
+
+                fx_private[tid * N + j] -= f * dx;
+                fy_private[tid * N + j] -= f * dy;
+                fz_private[tid * N + j] -= f * dz;
             }
         }
-
-        // Cleanup Thread-Local Memory
-        delete[] fx_private;
-        delete[] fy_private;
-        delete[] fz_private;
     }
+
+    // Final reduction
+    #pragma omp parallel for
+    for (int i = 0; i < N; i++) {
+        for (int t = 0; t < num_threads; t++) {
+            fx[i] += fx_private[t * N + i];
+            fy[i] += fy_private[t * N + i];
+            fz[i] += fz_private[t * N + i];
+        }
+    }
+
+    // Clean up
+    delete[] fx_private;
+    delete[] fy_private;
+    delete[] fz_private;
 }
+
+
+void compute_forces(double* x, double* y, double* z,
+                    double* fx, double* fy, double* fz,
+                    int* type, int N) {
+
+    // Reset global forces
+    #pragma omp parallel for simd
+    for (int i = 0; i < N; i++) {
+        fx[i] = 0.0;
+        fy[i] = 0.0;
+        fz[i] = 0.0;
+    }
+
+    // Lennard-Jones parameters
+    const double epsilon24[2][2] = {{72.0, 360.0}, {360.0, 1440.0}};
+    const double sigma6[2][2] = {{1.0, 64.0}, {64.0, 729.0}};
+
+    int total_pairs = N * (N - 1) / 2;
+    int num_threads = omp_get_max_threads();
+
+    // Allocate flat buffers: one block of N for each thread
+    double* fx_private = new double[num_threads * N]();
+    double* fy_private = new double[num_threads * N]();
+    double* fz_private = new double[num_threads * N]();
+
+    #pragma omp parallel
+    {
+        int tid = omp_get_thread_num();
+
+        #pragma omp for schedule(static)
+        for (int k = 0; k < total_pairs; ++k) {
+            int i = static_cast<int>(floor((2 * N - 1 - sqrt((2 * N - 1) * (2 * N - 1) - 8 * k)) / 2));
+            int j = k - (i * (2 * N - i - 1) / 2) + i + 1;
+
+            double dx = x[i] - x[j];
+            double dy = y[i] - y[j];
+            double dz = z[i] - z[j];
+
+            double r2 = dx * dx + dy * dy + dz * dz;
+            if (r2 > 0.0) {
+        
+                int t1 = type[i];
+                int t2 = type[j];
+                double sig6 = sigma6[t1][t2];
+                double eps24 = epsilon24[t1][t2];
+                double r6 = r2 * r2 * r2;
+                double f = eps24 * sig6 * (2 * sig6 - r6) / (r6 * r6 * r2);
+
+                fx_private[tid * N + i] += f * dx;
+                fy_private[tid * N + i] += f * dy;
+                fz_private[tid * N + i] += f * dz;
+
+                fx_private[tid * N + j] -= f * dx;
+                fy_private[tid * N + j] -= f * dy;
+                fz_private[tid * N + j] -= f * dz;
+            }
+        }
+    }
+
+    // Final reduction
+    #pragma omp parallel for
+    for (int i = 0; i < N; i++) {
+        for (int t = 0; t < num_threads; t++) {
+            fx[i] += fx_private[t * N + i];
+            fy[i] += fy_private[t * N + i];
+            fz[i] += fz_private[t * N + i];
+        }
+    }
+
+    // Clean up
+    delete[] fx_private;
+    delete[] fy_private;
+    delete[] fz_private;
+}
+
 
 /**
  * @brief Updates particle positions using velocity integration.
@@ -634,7 +719,13 @@ int main(int argc, char** argv) {
             double K = compute_KE(vx, vy, vz, m, N);
             kinetic_file << time << " " << K << "\n";
         }
-        compute_forces(x, y, z, fx, fy, fz, type, N, min_sep,test);
+        if (test=='y') {
+            compute_forces_test(x, y, z, fx, fy, fz, type, N, min_sep,test);
+            unit_tests(initial_condition, min_sep, x, y, vx, vy, N, Lx, Ly,end);
+        }
+        else{
+            compute_forces(x, y, z, fx, fy, fz, type, N);
+        }
         update_velocities(vx, vy, vz, fx, fy, fz, m, N, dt);
         // Temperature Change - only if temp is set
         if (temperature > 0.0) {
@@ -643,9 +734,7 @@ int main(int argc, char** argv) {
         update_positions(x, y, z, vx, vy, vz, N, dt,max_dim);
         
         
-        if (test=='y') {
-            unit_tests(initial_condition, min_sep, x, y, vx, vy, N, Lx, Ly,end);
-        }
+        
 
         apply_boundary_conditions(x, y, z, vx, vy, vz, N, Lx, Ly, Lz);
 
@@ -656,8 +745,6 @@ int main(int argc, char** argv) {
     if (test=='y') {
         unit_tests(initial_condition, min_sep, x, y, vx, vy, N, Lx, Ly,end);
     }
-    bool out = max_dim>Lx;
-    cout<<"Particles have left the box: "<<out<<" Max x dimension: "<<max_dim<<endl;
     /////// Cleanup Section ///////////
     delete[] x; delete[] y; delete[] z;
     delete[] vx; delete[] vy; delete[] vz;
