@@ -1,0 +1,3 @@
+Running with 32 thread(s)
+Execution time: 465.149 seconds
+Bash-timed execution time: 465 seconds

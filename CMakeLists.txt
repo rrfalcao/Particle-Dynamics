@@ -12,11 +12,11 @@ find_package(BLAS REQUIRED)
 find_package(OpenMP REQUIRED)
 
 # Serial Version
-add_executable(md mdmS.cpp)
+add_executable(md mdmS.cpp compute_serial.cpp init_testing.cpp)
 target_link_libraries(md PUBLIC ${Boost_LIBRARIES} ${BLAS_LIBRARIES})
 
 # Parallel Version
-add_executable(mdpar mdmPsingNP.cpp)
+add_executable(mdpar mdmPsingNP.cpp compute_parallel.cpp init_testing.cpp)
 target_link_libraries(mdpar PUBLIC OpenMP::OpenMP_CXX ${Boost_LIBRARIES} ${BLAS_LIBRARIES})
 
 # Default Build Target
